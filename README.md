@@ -48,6 +48,33 @@ Para conservar usuarios y tablero al reiniciar el contenedor:
 docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" -v $(pwd)/data.sqlite:/app/data.sqlite kamban-flow
 ```
 
+## Pasar La App A Otro PC
+
+### 1) Subir cambios al repositorio (PC actual)
+
+```bash
+git add .
+git commit -m "Prepare app for cross-machine deployment with Docker"
+git push
+```
+
+### 2) Clonar y ejecutar en el otro PC
+
+```bash
+git clone https://github.com/dgonxalex80/kamban.git
+cd kamban
+docker build -t kamban-flow .
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga" kamban-flow
+```
+
+Abre `http://localhost:3000`.
+
+### 3) (Opcional) Mantener datos entre reinicios
+
+```bash
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga" -v $(pwd)/data.sqlite:/app/data.sqlite kamban-flow
+```
+
 ## Funcionalidades
 
 - Registro con `usuario + clave`
@@ -66,3 +93,7 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" -v
 
 - `PORT` (default: `3000`)
 - `SESSION_SECRET` (recomendado definir en producción)
+
+## Licencia
+
+Proyecto bajo licencia MIT. Ver [LICENSE](./LICENSE).
