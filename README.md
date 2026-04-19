@@ -20,6 +20,34 @@ npm run dev
 
 Abre `http://localhost:3000`.
 
+## Docker
+
+### Requisitos
+
+- Docker instalado
+
+### Construir imagen
+
+```bash
+docker build -t kamban-flow .
+```
+
+### Ejecutar contenedor
+
+```bash
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" kamban-flow
+```
+
+Abre `http://localhost:3000`.
+
+### Persistir SQLite (opcional)
+
+Para conservar usuarios y tablero al reiniciar el contenedor:
+
+```bash
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" -v $(pwd)/data.sqlite:/app/data.sqlite kamban-flow
+```
+
 ## Funcionalidades
 
 - Registro con `usuario + clave`
