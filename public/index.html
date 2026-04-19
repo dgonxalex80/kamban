@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kamban Flow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="background-glow"></div>
+
+    <main class="shell">
+      <section id="auth-panel" class="auth-panel glass">
+        <div>
+          <p class="eyebrow">Metodología Kanban</p>
+          <h1>Kamban Flow</h1>
+          <p class="muted">Solo necesitas usuario y clave.</p>
+        </div>
+
+        <div class="auth-grid simple">
+          <form id="login-form" class="auth-form" autocomplete="off">
+            <h2>Iniciar sesión</h2>
+            <input name="username" type="text" placeholder="Usuario" required maxlength="40" />
+            <input name="password" type="password" placeholder="Clave" required minlength="6" />
+            <button type="submit" class="btn primary">Entrar</button>
+          </form>
+
+          <form id="register-form" class="auth-form" autocomplete="off">
+            <h2>Crear cuenta</h2>
+            <input name="username" type="text" placeholder="Usuario" required maxlength="40" />
+            <input name="password" type="password" placeholder="Clave" required minlength="6" />
+            <button type="submit" class="btn ghost">Registrarme</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="app-panel" class="app hidden">
+        <header class="topbar glass">
+          <div>
+            <h1>Kamban Flow</h1>
+            <p id="welcome" class="muted"></p>
+          </div>
+
+          <div class="topbar-actions">
+            <input id="search-input" type="search" placeholder="Buscar tareas..." aria-label="Buscar tareas" />
+            <button id="add-column-btn" class="btn primary">+ Columna</button>
+            <button id="reset-app-btn" class="btn ghost">Reiniciar</button>
+            <button id="logout-btn" class="btn ghost">Salir</button>
+          </div>
+        </header>
+
+        <section class="stats glass" aria-label="Resumen del tablero">
+          <article>
+            <p>Tareas Totales</p>
+            <strong id="stat-total">0</strong>
+          </article>
+          <article>
+            <p>En Progreso</p>
+            <strong id="stat-progress">0</strong>
+          </article>
+          <article>
+            <p>Finalizadas</p>
+            <strong id="stat-done">0</strong>
+          </article>
+        </section>
+
+        <section id="board" class="board" aria-label="Tablero Kanban"></section>
+      </section>
+
+      <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+    </main>
+
+    <template id="column-template">
+      <article class="column glass">
+        <header class="column-header">
+          <div>
+            <h2 class="column-title"></h2>
+            <p class="column-count">0 tareas</p>
+          </div>
+          <div class="column-actions">
+            <button class="icon-btn rename-column" title="Renombrar columna">✎</button>
+            <button class="icon-btn add-task" title="Agregar tarea">+</button>
+            <button class="icon-btn delete-column" title="Eliminar columna">×</button>
+          </div>
+        </header>
+
+        <div class="tasks" role="list"></div>
+
+        <form class="task-form hidden" autocomplete="off">
+          <input name="title" type="text" maxlength="80" placeholder="Título" required />
+          <textarea name="description" rows="3" maxlength="200" placeholder="Descripción"></textarea>
+          <div class="task-form-row">
+            <select name="priority">
+              <option value="low">Baja</option>
+              <option value="medium" selected>Media</option>
+              <option value="high">Alta</option>
+            </select>
+            <input name="dueDate" type="date" />
+          </div>
+          <div class="task-form-actions">
+            <button type="submit" class="btn primary">Guardar</button>
+            <button type="button" class="btn ghost cancel-task">Cancelar</button>
+          </div>
+        </form>
+      </article>
+    </template>
+
+    <template id="task-template">
+      <article class="task" draggable="true" role="listitem">
+        <div class="task-top">
+          <h3 class="task-title"></h3>
+          <div class="task-actions">
+            <button class="icon-btn edit-task" title="Editar tarea">✎</button>
+            <button class="icon-btn delete-task" title="Eliminar tarea">🗑</button>
+          </div>
+        </div>
+        <p class="task-description"></p>
+        <footer class="task-meta">
+          <span class="badge priority"></span>
+          <time class="due"></time>
+        </footer>
+      </article>
+    </template>
+
+    <dialog id="column-dialog">
+      <form method="dialog" class="dialog-form">
+        <h2>Nueva columna</h2>
+        <input id="column-name" type="text" maxlength="40" placeholder="Ej: Bloqueado" required />
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button value="default" class="btn primary">Crear</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
