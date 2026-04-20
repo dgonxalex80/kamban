@@ -287,6 +287,7 @@ input[type='search'] {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .badge {
@@ -314,6 +315,72 @@ input[type='search'] {
 .due {
   color: var(--muted);
   font-size: 0.7rem;
+}
+
+.task-progress {
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.checklist {
+  margin-top: 0.45rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.38rem;
+}
+
+.checklist summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.checklist-items {
+  list-style: none;
+  margin: 0.35rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.24rem;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.checklist-item label {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+  font-size: 0.72rem;
+  color: #d2e3f4;
+}
+
+.checklist-item input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+.checklist-item input[type='checkbox']:checked + span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.checklist-empty {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.checklist-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3rem;
+}
+
+.activity-input {
+  font-size: 0.72rem;
+  padding: 0.36rem 0.48rem;
 }
 
 .task-form {

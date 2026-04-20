@@ -57,7 +57,30 @@ async function loadBoard() {
 
 function sanitizeBoard(board) {
   if (!board || !Array.isArray(board.columns)) return createDefaultBoard();
-  return board;
+  return {
+    ...board,
+    columns: board.columns.map((column) => ({
+      ...column,
+      tasks: Array.isArray(column.tasks)
+        ? column.tasks.map((task) => ({
+            ...task,
+            activities: normalizeTaskActivities(task.activities),
+          }))
+        : [],
+    })),
+  };
+}
+
+function normalizeTaskActivities(activities) {
+  if (!Array.isArray(activities)) return [];
+  return activities
+    .filter((activity) => activity && typeof activity === 'object')
+    .map((activity) => ({
+      id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
+      title: String(activity.title || '').trim(),
+      done: Boolean(activity.done),
+    }))
+    .filter((activity) => activity.title.length > 0);
 }
 
 async function persistBoard() {
@@ -238,6 +261,16 @@ async function editTask(columnId, taskId, values) {
   await commitBoardChanges();
 }
 
+async function updateTaskActivities(columnId, taskId, activities) {
+  await editTask(columnId, taskId, { activities: normalizeTaskActivities(activities) });
+}
+
+function getActivityProgress(activities) {
+  const safeActivities = normalizeTaskActivities(activities);
+  const done = safeActivities.filter((activity) => activity.done).length;
+  return { total: safeActivities.length, done };
+}
+
 async function moveTask(fromColumnId, taskId, toColumnId) {
   if (!fromColumnId || !taskId || !toColumnId || fromColumnId === toColumnId) return;
 
@@ -277,6 +310,14 @@ function createTaskElement(task, columnId) {
   const priorityEl = clone.querySelector('.priority');
   const editBtn = clone.querySelector('.edit-task');
   const deleteBtn = clone.querySelector('.delete-task');
+  const checklistSummaryEl = clone.querySelector('.checklist-summary');
+  const checklistListEl = clone.querySelector('.checklist-items');
+  const checklistFormEl = clone.querySelector('.checklist-form');
+  const checklistInputEl = clone.querySelector('.activity-input');
+  const progressEl = clone.querySelector('.task-progress');
+
+  const activities = normalizeTaskActivities(task.activities);
+  const progress = getActivityProgress(activities);
 
   taskEl.dataset.taskId = task.id;
   taskEl.dataset.columnId = columnId;
@@ -286,6 +327,50 @@ function createTaskElement(task, columnId) {
   priorityEl.textContent = priorityLabel(task.priority);
   dueEl.textContent = formatDate(task.dueDate);
   dueEl.dateTime = task.dueDate || '';
+  progressEl.textContent =
+    progress.total > 0 ? `${progress.done}/${progress.total} actividades` : 'Sin actividades';
+  checklistSummaryEl.textContent = `Actividades (${progress.done}/${progress.total})`;
+
+  if (!activities.length) {
+    const emptyEl = document.createElement('li');
+    emptyEl.className = 'checklist-empty';
+    emptyEl.textContent = 'Aún no hay actividades.';
+    checklistListEl.append(emptyEl);
+  } else {
+    activities.forEach((activity) => {
+      const itemEl = document.createElement('li');
+      itemEl.className = 'checklist-item';
+      const labelEl = document.createElement('label');
+      const toggleEl = document.createElement('input');
+      const titleEl = document.createElement('span');
+      const removeBtn = document.createElement('button');
+
+      toggleEl.type = 'checkbox';
+      toggleEl.checked = activity.done;
+      titleEl.textContent = activity.title;
+      removeBtn.type = 'button';
+      removeBtn.className = 'icon-btn delete-activity';
+      removeBtn.title = 'Eliminar actividad';
+      removeBtn.textContent = '×';
+
+      labelEl.append(toggleEl, titleEl);
+      itemEl.append(labelEl, removeBtn);
+
+      toggleEl.addEventListener('change', () => {
+        const nextActivities = activities.map((entry) =>
+          entry.id === activity.id ? { ...entry, done: toggleEl.checked } : entry
+        );
+        updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
+      });
+
+      removeBtn.addEventListener('click', () => {
+        const nextActivities = activities.filter((entry) => entry.id !== activity.id);
+        updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
+      });
+
+      checklistListEl.append(itemEl);
+    });
+  }
 
   taskEl.addEventListener('dragstart', () => {
     draggedTask = { taskId: task.id, fromColumnId: columnId };
@@ -316,6 +401,15 @@ function createTaskElement(task, columnId) {
     );
   });
 
+  checklistFormEl.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const title = checklistInputEl.value.trim();
+    if (!title) return;
+
+    const nextActivities = [...activities, { id: crypto.randomUUID(), title, done: false }];
+    updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
+  });
+
   return taskEl;
 }
 
@@ -337,7 +431,10 @@ function createColumnElement(column) {
   const query = getSearchQuery();
   const visibleTasks = activeTasks.filter((task) => {
     if (!query) return true;
-    const searchable = `${task.title} ${task.description} ${priorityLabel(task.priority)}`.toLowerCase();
+    const activitiesText = normalizeTaskActivities(task.activities)
+      .map((activity) => activity.title)
+      .join(' ');
+    const searchable = `${task.title} ${task.description} ${priorityLabel(task.priority)} ${activitiesText}`.toLowerCase();
     return searchable.includes(query);
   });
 
@@ -406,6 +503,7 @@ function createColumnElement(column) {
         priority: String(fd.get('priority')),
         dueDate: String(fd.get('dueDate')),
         archivedAt: '',
+        activities: [],
       };
 
       if (!newTask.title) return;

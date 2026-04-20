@@ -107,6 +107,7 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga
 - Flujo base: `Ideas -> Por Hacer -> En Progreso -> Hecho -> Guardado`
 - Al mover una tarea a `Guardado`, desaparece del flujo visible y queda archivada (consultable desde `Guardado`)
 - CRUD de columnas y tareas
+- Checklist de actividades por cada tarea (seguimiento interno de avance)
 - Renombrado de columnas
 - Botón para reiniciar el tablero al estado base
 - Drag & drop de tareas entre columnas

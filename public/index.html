@@ -120,8 +120,17 @@
         <p class="task-description"></p>
         <footer class="task-meta">
           <span class="badge priority"></span>
+          <span class="task-progress"></span>
           <time class="due"></time>
         </footer>
+        <details class="checklist">
+          <summary class="checklist-summary">Actividades (0/0)</summary>
+          <ul class="checklist-items"></ul>
+          <form class="checklist-form" autocomplete="off">
+            <input class="activity-input" type="text" maxlength="80" placeholder="Nueva actividad..." />
+            <button type="submit" class="icon-btn" title="Agregar actividad">+</button>
+          </form>
+        </details>
       </article>
     </template>
 

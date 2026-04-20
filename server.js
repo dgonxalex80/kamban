@@ -187,14 +187,14 @@ function normalizeBoard(board) {
 
     if (idx >= 0) {
       used.add(idx);
-      columns.push({ ...board.columns[idx], name: requiredName });
+      columns.push(normalizeColumn(board.columns[idx], requiredName));
     } else {
       columns.push({ id: crypto.randomUUID(), name: requiredName, tasks: [] });
     }
   }
 
   board.columns.forEach((col, i) => {
-    if (!used.has(i)) columns.push(col);
+    if (!used.has(i)) columns.push(normalizeColumn(col, col?.name || 'Columna'));
   });
 
   return { ...board, columns };
@@ -202,6 +202,41 @@ function normalizeBoard(board) {
 
 function normalizeColumnName(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeColumn(column, fallbackName) {
+  const tasks = Array.isArray(column?.tasks) ? column.tasks.map(normalizeTask) : [];
+  return {
+    id: typeof column?.id === 'string' && column.id ? column.id : crypto.randomUUID(),
+    name: String(fallbackName || column?.name || 'Columna'),
+    tasks,
+  };
+}
+
+function normalizeTask(task) {
+  const activities = normalizeActivities(task?.activities);
+  return {
+    id: typeof task?.id === 'string' && task.id ? task.id : crypto.randomUUID(),
+    title: String(task?.title || 'Sin título'),
+    description: String(task?.description || ''),
+    priority: ['low', 'medium', 'high'].includes(task?.priority) ? task.priority : 'medium',
+    dueDate: String(task?.dueDate || ''),
+    archivedAt: typeof task?.archivedAt === 'string' ? task.archivedAt : '',
+    activities,
+  };
+}
+
+function normalizeActivities(activities) {
+  if (!Array.isArray(activities)) return [];
+
+  return activities
+    .filter((activity) => activity && typeof activity === 'object')
+    .map((activity) => ({
+      id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
+      title: String(activity.title || '').trim(),
+      done: Boolean(activity.done),
+    }))
+    .filter((activity) => activity.title.length > 0);
 }
 
 function isValidBoard(board) {
@@ -217,6 +252,13 @@ function isValidBoard(board) {
       if (!['low', 'medium', 'high'].includes(task.priority)) return false;
       if (typeof task.dueDate !== 'string') return false;
       if (task.archivedAt !== undefined && typeof task.archivedAt !== 'string') return false;
+      if (task.activities !== undefined) {
+        if (!Array.isArray(task.activities)) return false;
+        for (const activity of task.activities) {
+          if (!activity || typeof activity.id !== 'string' || typeof activity.title !== 'string') return false;
+          if (typeof activity.done !== 'boolean') return false;
+        }
+      }
     }
   }
 
