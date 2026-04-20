@@ -48,6 +48,30 @@ Para conservar usuarios y tablero al reiniciar el contenedor:
 docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" -v $(pwd)/data.sqlite:/app/data.sqlite kamban-flow
 ```
 
+### Acceder Desde Otro PC En La Misma Red Wi-Fi
+
+1) En el PC donde corre Docker, inicia la app:
+
+```bash
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" kamban-flow
+```
+
+2) Obtén la IP local del PC servidor:
+
+```bash
+hostname -I
+```
+
+3) Desde el otro PC conectado a la misma red, abre:
+
+```text
+http://IP_DEL_PC_SERVIDOR:3000
+```
+
+Ejemplo: `http://192.168.1.25:3000`
+
+Si no abre, permite el puerto `3000` en el firewall del PC servidor.
+
 ## Pasar La App A Otro PC
 
 ### 1) Subir cambios al repositorio (PC actual)
