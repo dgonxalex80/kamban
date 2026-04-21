@@ -5,8 +5,57 @@ App Kanban con backend `Express + SQLite + sesiones/cookies`.
 ## Requisitos
 
 - Node.js 18+
+- Git
 
-## Instalación
+## Instalar Node.js
+
+Descarga e instala la versión LTS desde `https://nodejs.org`.
+
+Verifica la instalación:
+
+```bash
+node -v
+npm -v
+```
+
+### Ubuntu / Debian (opcional por terminal)
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm
+node -v
+npm -v
+```
+
+### Windows
+
+1) Descarga el instalador LTS desde `https://nodejs.org`.
+2) Ejecuta el instalador (Next -> Next).
+3) Abre PowerShell y valida:
+
+```powershell
+node -v
+npm -v
+```
+
+### macOS
+
+1) Descarga el instalador LTS desde `https://nodejs.org`.
+2) Instala y valida en Terminal:
+
+```bash
+node -v
+npm -v
+```
+
+## Instalación de la app (clonando GitHub)
+
+```bash
+git clone https://github.com/dgonxalex80/kamban.git
+cd kamban
+```
+
+Instala dependencias:
 
 ```bash
 npm install
@@ -19,6 +68,13 @@ npm run dev
 ```
 
 Abre `http://localhost:3000`.
+Si `3000` está ocupado, la app intentará automáticamente `3001`, `3002`, etc. (hasta 10 reintentos).
+
+También puedes fijar el puerto manualmente:
+
+```bash
+PORT=3010 npm run dev
+```
 
 ## Docker
 

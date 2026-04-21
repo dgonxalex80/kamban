@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const Database = require('better-sqlite3');
 
 const PORT = Number(process.env.PORT || 3000);
+const MAX_PORT_RETRIES = 10;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-secret-in-production';
 const app = express();
 const db = new Database(path.join(__dirname, 'data.sqlite'));
@@ -129,10 +130,35 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Kamban Flow ejecutándose en http://localhost:${PORT}`);
-});
+startServer(PORT, 0);
+
+function startServer(port, retries) {
+  const server = app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Kamban Flow ejecutándose en http://localhost:${port}`);
+  });
+
+  server.on('error', (error) => {
+    if (error?.code === 'EADDRINUSE') {
+      if (process.env.PORT) {
+        // eslint-disable-next-line no-console
+        console.error(`El puerto ${port} ya está en uso. Define otro puerto, por ejemplo: PORT=${port + 1} npm run dev`);
+        process.exit(1);
+      }
+
+      if (retries < MAX_PORT_RETRIES) {
+        const nextPort = port + 1;
+        // eslint-disable-next-line no-console
+        console.warn(`Puerto ${port} en uso. Intentando ${nextPort}...`);
+        return startServer(nextPort, retries + 1);
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.error(`No se pudo iniciar el servidor en el puerto ${port}:`, error.message || error);
+    process.exit(1);
+  });
+}
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'No autenticado' });
