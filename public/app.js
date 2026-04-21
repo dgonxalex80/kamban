@@ -1,5 +1,6 @@
 function createDefaultBoard() {
   return {
+    hiddenColumnIds: [],
     columns: [
       { id: crypto.randomUUID(), name: 'Ideas', tasks: [] },
       { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [] },
@@ -12,6 +13,7 @@ function createDefaultBoard() {
 
 let state = createDefaultBoard();
 let draggedTask = { taskId: null, fromColumnId: null };
+let draggedColumnId = null;
 let currentUser = null;
 
 const authPanelEl = document.getElementById('auth-panel');
@@ -25,9 +27,34 @@ const resetAppBtn = document.getElementById('reset-app-btn');
 
 const boardEl = document.getElementById('board');
 const searchInput = document.getElementById('search-input');
+const toggleColumnsBtn = document.getElementById('toggle-columns-btn');
+const viewCompletedBtn = document.getElementById('view-completed-btn');
 const addColumnBtn = document.getElementById('add-column-btn');
 const columnDialog = document.getElementById('column-dialog');
 const columnNameInput = document.getElementById('column-name');
+const columnVisibilityPanel = document.getElementById('column-visibility-panel');
+const columnVisibilityList = document.getElementById('column-visibility-list');
+const hiddenColumnsBar = document.getElementById('hidden-columns-bar');
+const hiddenColumnsList = document.getElementById('hidden-columns-list');
+const completedDialog = document.getElementById('completed-dialog');
+const completedList = document.getElementById('completed-list');
+const completedTitle = document.getElementById('completed-title');
+const renameColumnDialog = document.getElementById('rename-column-dialog');
+const renameColumnInput = document.getElementById('rename-column-input');
+const taskEditDialog = document.getElementById('task-edit-dialog');
+const taskEditForm = document.getElementById('task-edit-form');
+const taskEditTitleInput = document.getElementById('task-edit-title');
+const taskEditFeedback = document.getElementById('task-edit-feedback');
+const taskEditDescriptionInput = document.getElementById('task-edit-description');
+const taskEditPriorityInput = document.getElementById('task-edit-priority');
+const taskEditDueDateInput = document.getElementById('task-edit-due-date');
+const taskEditActivitiesEl = document.getElementById('task-edit-activities');
+const taskEditActivityInput = document.getElementById('task-edit-activity-input');
+const taskEditAddActivityBtn = document.getElementById('task-edit-add-activity');
+const confirmDialog = document.getElementById('confirm-dialog');
+const confirmTitle = document.getElementById('confirm-title');
+const confirmMessage = document.getElementById('confirm-message');
+const confirmOkBtn = document.getElementById('confirm-ok-btn');
 
 const statTotal = document.getElementById('stat-total');
 const statProgress = document.getElementById('stat-progress');
@@ -35,6 +62,7 @@ const statDone = document.getElementById('stat-done');
 
 const columnTemplate = document.getElementById('column-template');
 const taskTemplate = document.getElementById('task-template');
+let taskEditorState = { taskId: null, activities: [], returnMode: null };
 
 start();
 
@@ -57,17 +85,25 @@ async function loadBoard() {
 
 function sanitizeBoard(board) {
   if (!board || !Array.isArray(board.columns)) return createDefaultBoard();
+  const sanitizedColumns = board.columns.map((column) => ({
+    ...column,
+    tasks: Array.isArray(column.tasks)
+      ? column.tasks.map((task) => ({
+          ...task,
+          completedAt: typeof task.completedAt === 'string' ? task.completedAt : '',
+          activities: normalizeTaskActivities(task.activities),
+        }))
+      : [],
+  }));
+  const ids = new Set(sanitizedColumns.map((column) => column.id));
+  const hiddenColumnIds = Array.isArray(board.hiddenColumnIds)
+    ? board.hiddenColumnIds.filter((id) => typeof id === 'string' && ids.has(id))
+    : [];
+
   return {
     ...board,
-    columns: board.columns.map((column) => ({
-      ...column,
-      tasks: Array.isArray(column.tasks)
-        ? column.tasks.map((task) => ({
-            ...task,
-            activities: normalizeTaskActivities(task.activities),
-          }))
-        : [],
-    })),
+    hiddenColumnIds,
+    columns: sanitizedColumns,
   };
 }
 
@@ -75,12 +111,29 @@ function normalizeTaskActivities(activities) {
   if (!Array.isArray(activities)) return [];
   return activities
     .filter((activity) => activity && typeof activity === 'object')
-    .map((activity) => ({
-      id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
-      title: String(activity.title || '').trim(),
-      done: Boolean(activity.done),
-    }))
+    .map((activity) => {
+      const items = normalizeActivityItems(activity.items);
+      const done = items.length > 0 ? items.every((item) => item.done) : Boolean(activity.done);
+      return {
+        id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
+        title: String(activity.title || '').trim(),
+        done,
+        items,
+      };
+    })
     .filter((activity) => activity.title.length > 0);
+}
+
+function normalizeActivityItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : crypto.randomUUID(),
+      title: String(item.title || '').trim(),
+      done: Boolean(item.done),
+    }))
+    .filter((item) => item.title.length > 0);
 }
 
 async function persistBoard() {
@@ -131,6 +184,35 @@ async function apiFetch(url, options = {}) {
   }
 
   return payload;
+}
+
+function openDialogSafely(dialogEl) {
+  if (!dialogEl || typeof dialogEl.showModal !== 'function') {
+    setFeedback('Tu navegador no soporta esta acción.', true);
+    return false;
+  }
+  dialogEl.showModal();
+  return true;
+}
+
+function askConfirm(title, message, okLabel = 'Confirmar') {
+  return new Promise((resolve) => {
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmOkBtn.textContent = okLabel;
+    if (!openDialogSafely(confirmDialog)) {
+      resolve(false);
+      return;
+    }
+
+    confirmDialog.addEventListener(
+      'close',
+      () => {
+        resolve(confirmDialog.returnValue === 'default');
+      },
+      { once: true }
+    );
+  });
 }
 
 loginFormEl.addEventListener('submit', async (event) => {
@@ -189,7 +271,11 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 resetAppBtn.addEventListener('click', async () => {
-  const confirmReset = confirm('Esto reiniciará todo tu tablero actual. ¿Deseas continuar?');
+  const confirmReset = await askConfirm(
+    'Reiniciar tablero',
+    'Esto reiniciará todo tu tablero actual. Esta acción no se puede deshacer.',
+    'Reiniciar'
+  );
   if (!confirmReset) return;
 
   try {
@@ -231,6 +317,38 @@ function isArchivedTask(task) {
   return typeof task.archivedAt === 'string' && task.archivedAt.length > 0;
 }
 
+function isDoneColumn(column) {
+  return normalizeColumnName(column?.name) === 'hecho';
+}
+
+function isStoredColumn(column) {
+  return normalizeColumnName(column?.name) === 'guardado';
+}
+
+function isColumnHidden(columnId) {
+  return Array.isArray(state.hiddenColumnIds) && state.hiddenColumnIds.includes(columnId);
+}
+
+function getColumnById(columnId) {
+  return state.columns.find((column) => column.id === columnId) || null;
+}
+
+function getDoneColumn() {
+  return state.columns.find((column) => isDoneColumn(column)) || null;
+}
+
+function findTaskLocation(taskId) {
+  for (const column of state.columns) {
+    const task = column.tasks.find((entry) => entry.id === taskId);
+    if (task) return { column, task };
+  }
+  return null;
+}
+
+function isTaskCompleted(task) {
+  return typeof task?.completedAt === 'string' && task.completedAt.length > 0;
+}
+
 function updateStats() {
   const columnsByName = Object.fromEntries(state.columns.map((col) => [col.name.toLowerCase(), col]));
   const total = state.columns.reduce((sum, col) => sum + col.tasks.length, 0);
@@ -261,8 +379,221 @@ async function editTask(columnId, taskId, values) {
   await commitBoardChanges();
 }
 
+function renderTaskEditorActivities() {
+  taskEditActivitiesEl.innerHTML = '';
+  const activities = normalizeTaskActivities(taskEditorState.activities);
+  taskEditorState.activities = activities;
+
+  if (!activities.length) {
+    const empty = document.createElement('li');
+    empty.className = 'checklist-empty';
+    empty.textContent = 'Aún no hay actividades.';
+    taskEditActivitiesEl.append(empty);
+    return;
+  }
+
+  activities.forEach((activity) => {
+    const item = document.createElement('li');
+    item.className = 'checklist-item';
+    const label = document.createElement('label');
+    const toggle = document.createElement('input');
+    const text = document.createElement('span');
+    const remove = document.createElement('button');
+    const nestedWrap = document.createElement('details');
+    const nestedSummary = document.createElement('summary');
+    const nestedList = document.createElement('ul');
+    const nestedForm = document.createElement('div');
+    const nestedInput = document.createElement('input');
+    const nestedAddBtn = document.createElement('button');
+    const subItems = normalizeActivityItems(activity.items);
+    const doneSub = subItems.filter((subItem) => subItem.done).length;
+
+    toggle.type = 'checkbox';
+    toggle.checked = activity.done;
+    text.textContent = activity.title;
+    remove.type = 'button';
+    remove.className = 'icon-btn delete-activity';
+    remove.title = 'Eliminar actividad';
+    remove.textContent = '×';
+
+    toggle.addEventListener('change', () => {
+      taskEditorState.activities = taskEditorState.activities.map((entry) =>
+        entry.id === activity.id
+          ? {
+              ...entry,
+              done: toggle.checked,
+              items: normalizeActivityItems(entry.items).map((subItem) => ({ ...subItem, done: toggle.checked })),
+            }
+          : entry
+      );
+      renderTaskEditorActivities();
+    });
+
+    remove.addEventListener('click', () => {
+      taskEditorState.activities = taskEditorState.activities.filter((entry) => entry.id !== activity.id);
+      renderTaskEditorActivities();
+    });
+
+    nestedWrap.className = 'nested-checklist';
+    nestedWrap.open = subItems.length === 0;
+    nestedSummary.className = 'nested-checklist-summary';
+    nestedSummary.textContent = `Sub-actividades (${doneSub}/${subItems.length})`;
+    nestedList.className = 'nested-checklist-items';
+    nestedForm.className = 'nested-checklist-form';
+    nestedInput.className = 'activity-input';
+    nestedInput.type = 'text';
+    nestedInput.maxLength = 80;
+    nestedInput.placeholder = 'Nueva sub-actividad...';
+    nestedAddBtn.type = 'button';
+    nestedAddBtn.className = 'icon-btn';
+    nestedAddBtn.textContent = '+';
+    nestedAddBtn.title = 'Agregar sub-actividad';
+
+    if (!subItems.length) {
+      const empty = document.createElement('li');
+      empty.className = 'checklist-empty';
+      empty.textContent = 'Sin sub-actividades.';
+      nestedList.append(empty);
+    } else {
+      subItems.forEach((subItem) => {
+        const subEl = document.createElement('li');
+        subEl.className = 'checklist-item nested-item';
+        const subLabel = document.createElement('label');
+        const subToggle = document.createElement('input');
+        const subText = document.createElement('span');
+        const subRemove = document.createElement('button');
+
+        subToggle.type = 'checkbox';
+        subToggle.checked = subItem.done;
+        subText.textContent = subItem.title;
+        subRemove.type = 'button';
+        subRemove.className = 'icon-btn delete-activity';
+        subRemove.title = 'Eliminar sub-actividad';
+        subRemove.textContent = '×';
+
+        subToggle.addEventListener('change', () => {
+          taskEditorState.activities = taskEditorState.activities.map((entry) => {
+            if (entry.id !== activity.id) return entry;
+            const nextItems = normalizeActivityItems(entry.items).map((value) =>
+              value.id === subItem.id ? { ...value, done: subToggle.checked } : value
+            );
+            return { ...entry, items: nextItems, done: nextItems.length > 0 ? nextItems.every((value) => value.done) : entry.done };
+          });
+          renderTaskEditorActivities();
+        });
+
+        subRemove.addEventListener('click', () => {
+          taskEditorState.activities = taskEditorState.activities.map((entry) => {
+            if (entry.id !== activity.id) return entry;
+            const nextItems = normalizeActivityItems(entry.items).filter((value) => value.id !== subItem.id);
+            return { ...entry, items: nextItems, done: nextItems.length > 0 ? nextItems.every((value) => value.done) : entry.done };
+          });
+          renderTaskEditorActivities();
+        });
+
+        subLabel.append(subToggle, subText);
+        subEl.append(subLabel, subRemove);
+        nestedList.append(subEl);
+      });
+    }
+
+    nestedAddBtn.addEventListener('click', () => {
+      const subTitle = nestedInput.value.trim();
+      if (!subTitle) return;
+      taskEditorState.activities = taskEditorState.activities.map((entry) => {
+        if (entry.id !== activity.id) return entry;
+        const nextItems = [...normalizeActivityItems(entry.items), { id: crypto.randomUUID(), title: subTitle, done: false }];
+        return { ...entry, items: nextItems, done: false };
+      });
+      renderTaskEditorActivities();
+    });
+
+    label.append(toggle, text);
+    item.append(label, remove);
+    nestedForm.append(nestedInput, nestedAddBtn);
+    nestedWrap.append(nestedSummary, nestedList, nestedForm);
+    item.append(nestedWrap);
+    taskEditActivitiesEl.append(item);
+  });
+}
+
+function openTaskEditor(taskId, options = {}) {
+  const location = findTaskLocation(taskId);
+  if (!location) {
+    setFeedback('No se encontró la tarea.', true);
+    return;
+  }
+
+  taskEditorState = {
+    taskId,
+    activities: normalizeTaskActivities(location.task.activities),
+    returnMode: options.returnMode || null,
+  };
+
+  taskEditTitleInput.value = location.task.title || '';
+  taskEditTitleInput.classList.remove('input-error');
+  taskEditFeedback.textContent = '';
+  taskEditDescriptionInput.value = location.task.description || '';
+  taskEditPriorityInput.value = location.task.priority || 'medium';
+  taskEditDueDateInput.value = location.task.dueDate || '';
+  taskEditActivityInput.value = '';
+  renderTaskEditorActivities();
+  if (completedDialog.open) completedDialog.close();
+  openDialogSafely(taskEditDialog);
+}
+
+function setTaskEditFeedback(message, isError = false) {
+  taskEditFeedback.textContent = message;
+  taskEditFeedback.style.color = isError ? 'var(--danger)' : '#ffd8a0';
+}
+
 async function updateTaskActivities(columnId, taskId, activities) {
-  await editTask(columnId, taskId, { activities: normalizeTaskActivities(activities) });
+  const nextActivities = normalizeTaskActivities(activities);
+  const doneByChecklist = nextActivities.length > 0 && nextActivities.every((activity) => activity.done);
+  const now = new Date().toISOString();
+
+  let updatedTask = null;
+  state.columns = state.columns.map((column) => {
+    if (column.id !== columnId) return column;
+    return {
+      ...column,
+      tasks: column.tasks.map((task) => {
+        if (task.id !== taskId) return task;
+        updatedTask = {
+          ...task,
+          activities: nextActivities,
+          completedAt: doneByChecklist ? task.completedAt || now : '',
+        };
+        return updatedTask;
+      }),
+    };
+  });
+
+  if (!updatedTask) return;
+
+  const currentColumn = getColumnById(columnId);
+  const doneColumn = getDoneColumn();
+  const shouldMoveToDone =
+    doneByChecklist &&
+    currentColumn &&
+    !isDoneColumn(currentColumn) &&
+    !isStoredColumn(currentColumn) &&
+    doneColumn &&
+    doneColumn.id !== columnId;
+
+  if (shouldMoveToDone) {
+    state.columns = state.columns.map((column) => {
+      if (column.id === columnId) {
+        return { ...column, tasks: column.tasks.filter((task) => task.id !== taskId) };
+      }
+      if (column.id === doneColumn.id) {
+        return { ...column, tasks: [...column.tasks, updatedTask] };
+      }
+      return column;
+    });
+  }
+
+  await commitBoardChanges();
 }
 
 function getActivityProgress(activities) {
@@ -291,10 +622,14 @@ async function moveTask(fromColumnId, taskId, toColumnId) {
 
   state.columns = state.columns.map((column) => {
     if (column.id !== toColumnId) return column;
-    const isGuardado = normalizeColumnName(column.name) === 'guardado';
-    const nextTask = isGuardado
-      ? { ...movingTask, archivedAt: new Date().toISOString() }
-      : { ...movingTask, archivedAt: '' };
+    const now = new Date().toISOString();
+    const isGuardado = isStoredColumn(column);
+    const isHecho = isDoneColumn(column);
+    const nextTask = {
+      ...movingTask,
+      archivedAt: isGuardado ? now : '',
+      completedAt: isHecho || isGuardado ? movingTask.completedAt || now : movingTask.completedAt || '',
+    };
     return { ...column, tasks: [...column.tasks, nextTask] };
   });
 
@@ -308,6 +643,7 @@ function createTaskElement(task, columnId) {
   const descriptionEl = clone.querySelector('.task-description');
   const dueEl = clone.querySelector('.due');
   const priorityEl = clone.querySelector('.priority');
+  const doneStatusEl = clone.querySelector('.done-status');
   const editBtn = clone.querySelector('.edit-task');
   const deleteBtn = clone.querySelector('.delete-task');
   const checklistSummaryEl = clone.querySelector('.checklist-summary');
@@ -318,6 +654,7 @@ function createTaskElement(task, columnId) {
 
   const activities = normalizeTaskActivities(task.activities);
   const progress = getActivityProgress(activities);
+  const completed = isTaskCompleted(task);
 
   taskEl.dataset.taskId = task.id;
   taskEl.dataset.columnId = columnId;
@@ -328,8 +665,18 @@ function createTaskElement(task, columnId) {
   dueEl.textContent = formatDate(task.dueDate);
   dueEl.dateTime = task.dueDate || '';
   progressEl.textContent =
-    progress.total > 0 ? `${progress.done}/${progress.total} actividades` : 'Sin actividades';
+    progress.total > 0
+      ? `${progress.done}/${progress.total} actividades`
+      : completed
+        ? 'Tarea terminada'
+        : 'Sin actividades';
   checklistSummaryEl.textContent = `Actividades (${progress.done}/${progress.total})`;
+
+  if (completed) {
+    taskEl.classList.add('task-completed');
+    doneStatusEl.classList.remove('hidden');
+    doneStatusEl.textContent = 'Terminada';
+  }
 
   if (!activities.length) {
     const emptyEl = document.createElement('li');
@@ -344,6 +691,7 @@ function createTaskElement(task, columnId) {
       const toggleEl = document.createElement('input');
       const titleEl = document.createElement('span');
       const removeBtn = document.createElement('button');
+      const subItems = normalizeActivityItems(activity.items);
 
       toggleEl.type = 'checkbox';
       toggleEl.checked = activity.done;
@@ -358,7 +706,13 @@ function createTaskElement(task, columnId) {
 
       toggleEl.addEventListener('change', () => {
         const nextActivities = activities.map((entry) =>
-          entry.id === activity.id ? { ...entry, done: toggleEl.checked } : entry
+          entry.id === activity.id
+            ? {
+                ...entry,
+                done: toggleEl.checked,
+                items: normalizeActivityItems(entry.items).map((subItem) => ({ ...subItem, done: toggleEl.checked })),
+              }
+            : entry
         );
         updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
       });
@@ -367,6 +721,18 @@ function createTaskElement(task, columnId) {
         const nextActivities = activities.filter((entry) => entry.id !== activity.id);
         updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
       });
+
+      if (subItems.length) {
+        const subItemsEl = document.createElement('ul');
+        subItemsEl.className = 'subactivity-list';
+        subItems.forEach((subItem) => {
+          const subEl = document.createElement('li');
+          subEl.className = 'subactivity-name';
+          subEl.textContent = subItem.title;
+          subItemsEl.append(subEl);
+        });
+        itemEl.append(subItemsEl);
+      }
 
       checklistListEl.append(itemEl);
     });
@@ -379,6 +745,7 @@ function createTaskElement(task, columnId) {
 
   taskEl.addEventListener('dragend', () => {
     taskEl.classList.remove('dragging');
+    draggedTask = { taskId: null, fromColumnId: null };
   });
 
   deleteBtn.addEventListener('click', () => {
@@ -386,19 +753,7 @@ function createTaskElement(task, columnId) {
   });
 
   editBtn.addEventListener('click', () => {
-    const title = prompt('Editar título:', task.title);
-    if (title === null) return;
-
-    const description = prompt('Editar descripción:', task.description ?? '');
-    if (description === null) return;
-
-    const priority = prompt('Prioridad (low, medium, high):', task.priority);
-    if (priority === null) return;
-
-    const normalizedPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'medium';
-    editTask(columnId, task.id, { title: title.trim() || 'Sin título', description, priority: normalizedPriority }).catch(
-      (error) => setFeedback(error.message, true)
-    );
+    openTaskEditor(task.id);
   });
 
   checklistFormEl.addEventListener('submit', (event) => {
@@ -406,7 +761,7 @@ function createTaskElement(task, columnId) {
     const title = checklistInputEl.value.trim();
     if (!title) return;
 
-    const nextActivities = [...activities, { id: crypto.randomUUID(), title, done: false }];
+    const nextActivities = [...activities, { id: crypto.randomUUID(), title, done: false, items: [] }];
     updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
   });
 
@@ -420,11 +775,14 @@ function createColumnElement(column) {
   const countEl = clone.querySelector('.column-count');
   const tasksEl = clone.querySelector('.tasks');
   const renameColumnBtn = clone.querySelector('.rename-column');
+  const toggleColumnVisibilityBtn = clone.querySelector('.toggle-column-visibility');
+  const moveLeftBtn = clone.querySelector('.move-column-left');
+  const moveRightBtn = clone.querySelector('.move-column-right');
   const addTaskBtn = clone.querySelector('.add-task');
   const deleteColumnBtn = clone.querySelector('.delete-column');
   const formEl = clone.querySelector('.task-form');
   const cancelBtn = clone.querySelector('.cancel-task');
-  const isGuardado = normalizeColumnName(column.name) === 'guardado';
+  const isGuardado = isStoredColumn(column);
   const archivedTasks = isGuardado ? column.tasks : column.tasks.filter((task) => isArchivedTask(task));
   const activeTasks = isGuardado ? [] : column.tasks.filter((task) => !isArchivedTask(task));
 
@@ -432,18 +790,38 @@ function createColumnElement(column) {
   const visibleTasks = activeTasks.filter((task) => {
     if (!query) return true;
     const activitiesText = normalizeTaskActivities(task.activities)
-      .map((activity) => activity.title)
+      .flatMap((activity) => [
+        activity.title,
+        ...normalizeActivityItems(activity.items).map((subItem) => subItem.title),
+      ])
       .join(' ');
     const searchable = `${task.title} ${task.description} ${priorityLabel(task.priority)} ${activitiesText}`.toLowerCase();
     return searchable.includes(query);
   });
 
   columnEl.dataset.columnId = column.id;
+  columnEl.draggable = true;
   titleEl.textContent = column.name;
   countEl.textContent = isGuardado
     ? `${archivedTasks.length} guardada${archivedTasks.length === 1 ? '' : 's'}`
     : `${visibleTasks.length} tarea${visibleTasks.length === 1 ? '' : 's'}`;
   visibleTasks.forEach((task) => tasksEl.append(createTaskElement(task, column.id)));
+
+  const columnIndex = state.columns.findIndex((col) => col.id === column.id);
+  moveLeftBtn.disabled = columnIndex <= 0;
+  moveRightBtn.disabled = columnIndex < 0 || columnIndex >= state.columns.length - 1;
+
+  moveLeftBtn.addEventListener('click', () => {
+    moveColumn(column.id, -1).catch((error) => setFeedback(error.message, true));
+  });
+
+  moveRightBtn.addEventListener('click', () => {
+    moveColumn(column.id, 1).catch((error) => setFeedback(error.message, true));
+  });
+
+  toggleColumnVisibilityBtn.addEventListener('click', () => {
+    toggleColumnVisibility(column.id, false).catch((error) => setFeedback(error.message, true));
+  });
 
   if (isGuardado) {
     renameColumnBtn.style.display = 'none';
@@ -451,27 +829,28 @@ function createColumnElement(column) {
     addTaskBtn.textContent = 'Ver';
     addTaskBtn.title = 'Ver tareas guardadas';
     addTaskBtn.addEventListener('click', () => {
-      if (!archivedTasks.length) {
-        alert('No hay tareas guardadas.');
-        return;
-      }
-
-      const summary = archivedTasks
-        .map((task, idx) => `${idx + 1}. ${task.title}${task.dueDate ? ` (vence: ${formatDate(task.dueDate)})` : ''}`)
-        .join('\n');
-      alert(`Tareas guardadas:\n\n${summary}`);
+      openCompletedTasksDialog({ mode: 'stored' });
     });
   } else {
     renameColumnBtn.addEventListener('click', () => {
-      const newName = prompt('Nuevo nombre de columna:', column.name);
-      if (!newName) return;
+      renameColumnInput.value = column.name;
+      if (!openDialogSafely(renameColumnDialog)) return;
+      renameColumnDialog.addEventListener(
+        'close',
+        () => {
+          if (renameColumnDialog.returnValue === 'cancel') return;
+          const newName = renameColumnInput.value.trim();
+          if (!newName) return;
 
-      state.columns = state.columns.map((col) => {
-        if (col.id !== column.id) return col;
-        return { ...col, name: newName.trim() };
-      });
+          state.columns = state.columns.map((col) => {
+            if (col.id !== column.id) return col;
+            return { ...col, name: newName };
+          });
 
-      commitBoardChanges().catch((error) => setFeedback(error.message, true));
+          commitBoardChanges().catch((error) => setFeedback(error.message, true));
+        },
+        { once: true }
+      );
     });
   }
 
@@ -503,6 +882,7 @@ function createColumnElement(column) {
         priority: String(fd.get('priority')),
         dueDate: String(fd.get('dueDate')),
         archivedAt: '',
+        completedAt: '',
         activities: [],
       };
 
@@ -518,15 +898,24 @@ function createColumnElement(column) {
 
     deleteColumnBtn.addEventListener('click', () => {
       if (state.columns.length <= 1) {
-        alert('Debe existir al menos una columna.');
+        setFeedback('Debe existir al menos una columna.', true);
         return;
       }
 
-      const hasTasks = column.tasks.length > 0;
-      if (hasTasks && !confirm('La columna tiene tareas. ¿Seguro que deseas eliminarla?')) return;
+      (async () => {
+        const hasTasks = column.tasks.length > 0;
+        if (hasTasks) {
+          const confirmed = await askConfirm(
+            'Eliminar columna',
+            'La columna tiene tareas. ¿Seguro que deseas eliminarla?',
+            'Eliminar'
+          );
+          if (!confirmed) return;
+        }
 
-      state.columns = state.columns.filter((col) => col.id !== column.id);
-      commitBoardChanges().catch((error) => setFeedback(error.message, true));
+        state.columns = state.columns.filter((col) => col.id !== column.id);
+        commitBoardChanges().catch((error) => setFeedback(error.message, true));
+      })();
     });
   }
 
@@ -541,41 +930,270 @@ function createColumnElement(column) {
 
   columnEl.addEventListener('drop', () => {
     columnEl.classList.remove('drag-target');
+    if (!draggedTask.taskId) return;
     moveTask(draggedTask.fromColumnId, draggedTask.taskId, column.id).catch((error) => setFeedback(error.message, true));
+  });
+
+  columnEl.addEventListener('dragstart', (event) => {
+    if (event.target.closest('.task')) return;
+    draggedColumnId = column.id;
+    columnEl.classList.add('dragging');
+  });
+
+  columnEl.addEventListener('dragend', () => {
+    draggedColumnId = null;
+    columnEl.classList.remove('dragging');
+  });
+
+  columnEl.addEventListener('dragover', (event) => {
+    if (!draggedColumnId || draggedColumnId === column.id) return;
+    event.preventDefault();
+  });
+
+  columnEl.addEventListener('drop', (event) => {
+    if (!draggedColumnId || draggedColumnId === column.id || event.target.closest('.task')) return;
+    event.preventDefault();
+    moveColumnToIndex(draggedColumnId, column.id).catch((error) => setFeedback(error.message, true));
   });
 
   return columnEl;
 }
 
 function renderBoard() {
-  const flowOrder = ['ideas', 'por hacer', 'en progreso', 'hecho', 'guardado'];
-  const sortedColumns = [...state.columns].sort((a, b) => {
-    const aIdx = flowOrder.indexOf(normalizeColumnName(a.name));
-    const bIdx = flowOrder.indexOf(normalizeColumnName(b.name));
-    const aRank = aIdx === -1 ? flowOrder.length : aIdx;
-    const bRank = bIdx === -1 ? flowOrder.length : bIdx;
-    return aRank - bRank;
-  });
-
   boardEl.innerHTML = '';
-  sortedColumns.forEach((column) => boardEl.append(createColumnElement(column)));
+  const visibleColumns = state.columns.filter((column) => !isColumnHidden(column.id));
+  visibleColumns.forEach((column) => boardEl.append(createColumnElement(column)));
+  renderColumnVisibilityPanel();
+  renderHiddenColumnsBar();
   updateStats();
 }
 
-searchInput.addEventListener('input', renderBoard);
+function renderColumnVisibilityPanel() {
+  columnVisibilityList.innerHTML = '';
+  state.columns.forEach((column) => {
+    const item = document.createElement('label');
+    item.className = 'visibility-item';
 
-addColumnBtn.addEventListener('click', () => {
-  columnNameInput.value = '';
-  if (typeof columnDialog.showModal === 'function') {
-    columnDialog.showModal();
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = !isColumnHidden(column.id);
+    checkbox.addEventListener('change', () => {
+      toggleColumnVisibility(column.id, checkbox.checked).catch((error) => setFeedback(error.message, true));
+    });
+
+    const text = document.createElement('span');
+    text.textContent = column.name;
+    item.append(checkbox, text);
+    columnVisibilityList.append(item);
+  });
+}
+
+async function toggleColumnVisibility(columnId, visible) {
+  const current = Array.isArray(state.hiddenColumnIds) ? state.hiddenColumnIds : [];
+  const visibleCount = state.columns.length - current.length;
+  if (visible) {
+    state.hiddenColumnIds = current.filter((id) => id !== columnId);
+  } else if (!current.includes(columnId)) {
+    if (visibleCount <= 1) {
+      setFeedback('Debe quedar al menos una columna visible.', true);
+      return;
+    }
+    state.hiddenColumnIds = [...current, columnId];
+  }
+  await commitBoardChanges();
+}
+
+function renderHiddenColumnsBar() {
+  const hiddenIds = Array.isArray(state.hiddenColumnIds) ? state.hiddenColumnIds : [];
+  hiddenColumnsList.innerHTML = '';
+  if (!hiddenIds.length) {
+    hiddenColumnsBar.classList.add('hidden');
     return;
   }
 
-  const fallbackName = prompt('Nombre de la columna:');
-  if (!fallbackName) return;
+  hiddenColumnsBar.classList.remove('hidden');
+  hiddenIds.forEach((columnId) => {
+    const column = getColumnById(columnId);
+    if (!column) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ghost hidden-column-chip';
+    btn.textContent = `Mostrar ${column.name}`;
+    btn.addEventListener('click', () => {
+      toggleColumnVisibility(column.id, true).catch((error) => setFeedback(error.message, true));
+    });
+    hiddenColumnsList.append(btn);
+  });
+}
 
-  state.columns.push({ id: crypto.randomUUID(), name: fallbackName.trim(), tasks: [] });
-  commitBoardChanges().catch((error) => setFeedback(error.message, true));
+async function moveColumn(columnId, direction) {
+  const fromIndex = state.columns.findIndex((column) => column.id === columnId);
+  const toIndex = fromIndex + direction;
+  if (fromIndex < 0 || toIndex < 0 || toIndex >= state.columns.length) return;
+  const next = [...state.columns];
+  const [moving] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moving);
+  state.columns = next;
+  await commitBoardChanges();
+}
+
+async function moveColumnToIndex(fromColumnId, targetColumnId) {
+  const fromIndex = state.columns.findIndex((column) => column.id === fromColumnId);
+  const targetIndex = state.columns.findIndex((column) => column.id === targetColumnId);
+  if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) return;
+  const next = [...state.columns];
+  const [moving] = next.splice(fromIndex, 1);
+  next.splice(targetIndex, 0, moving);
+  state.columns = next;
+  await commitBoardChanges();
+}
+
+function collectCompletedTasks(mode = 'all') {
+  const result = [];
+  state.columns.forEach((column) => {
+    column.tasks.forEach((task) => {
+      const isStored = isStoredColumn(column);
+      const isCompleted = isDoneColumn(column) || isStored || isTaskCompleted(task);
+      if (!isCompleted) return;
+      if (mode === 'stored' && !isStored) return;
+      if (mode === 'done' && isStored) return;
+      if (mode === 'all' || mode === 'stored' || mode === 'done') {
+        result.push({ ...task, columnName: column.name });
+      }
+    });
+  });
+  return result;
+}
+
+function openCompletedTasksDialog(options = {}) {
+  const mode = options.mode || 'all';
+  const titleByMode = {
+    all: 'Tareas terminadas y almacenadas',
+    stored: 'Tareas almacenadas',
+    done: 'Tareas terminadas',
+  };
+  completedTitle.textContent = titleByMode[mode] || titleByMode.all;
+  const completedTasks = collectCompletedTasks(mode);
+  completedList.innerHTML = '';
+
+  if (!completedTasks.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No hay tareas terminadas o almacenadas.';
+    completedList.append(empty);
+  } else {
+    completedTasks.forEach((task, index) => {
+      const item = document.createElement('article');
+      item.className = 'completed-item';
+      const completedText = task.completedAt ? `Finalizada: ${formatDate(task.completedAt.slice(0, 10))}` : '';
+      const archivedText = task.archivedAt ? `Almacenada: ${formatDate(task.archivedAt.slice(0, 10))}` : '';
+      const title = document.createElement('h3');
+      title.textContent = `${index + 1}. ${task.title}`;
+      const description = document.createElement('p');
+      description.textContent = task.description || 'Sin descripción';
+      const column = document.createElement('p');
+      column.className = 'muted';
+      column.textContent = `Columna: ${task.columnName}`;
+      const meta = document.createElement('p');
+      meta.className = 'muted';
+      meta.textContent = [completedText, archivedText].filter(Boolean).join(' | ') || 'Sin fecha de cierre';
+      const editDescriptionBtn = document.createElement('button');
+      editDescriptionBtn.type = 'button';
+      editDescriptionBtn.className = 'btn ghost completed-edit-btn';
+      editDescriptionBtn.textContent = 'Editar tarea';
+      editDescriptionBtn.addEventListener('click', () => {
+        openTaskEditor(task.id, { returnMode: mode });
+      });
+      item.append(title, description, column, meta, editDescriptionBtn);
+      completedList.append(item);
+    });
+  }
+
+  openDialogSafely(completedDialog);
+}
+
+searchInput.addEventListener('input', renderBoard);
+toggleColumnsBtn.addEventListener('click', () => {
+  columnVisibilityPanel.classList.toggle('hidden');
+});
+viewCompletedBtn.addEventListener('click', openCompletedTasksDialog);
+function addActivityFromEditorInput() {
+  const title = taskEditActivityInput.value.trim();
+  if (!title) {
+    setTaskEditFeedback('Escribe un nombre para la actividad.', true);
+    return false;
+  }
+  taskEditorState.activities = [...taskEditorState.activities, { id: crypto.randomUUID(), title, done: false, items: [] }];
+  taskEditActivityInput.value = '';
+  setTaskEditFeedback('');
+  renderTaskEditorActivities();
+  taskEditActivityInput.focus();
+  return true;
+}
+
+taskEditAddActivityBtn.addEventListener('click', addActivityFromEditorInput);
+taskEditActivityInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  addActivityFromEditorInput();
+});
+
+taskEditForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!taskEditorState.taskId) return;
+
+  const location = findTaskLocation(taskEditorState.taskId);
+  if (!location) {
+    taskEditDialog.close();
+    return;
+  }
+
+  const title = taskEditTitleInput.value.trim();
+  if (!title) {
+    taskEditTitleInput.classList.add('input-error');
+    setTaskEditFeedback('El título es obligatorio.', true);
+    taskEditTitleInput.focus();
+    return;
+  }
+  taskEditTitleInput.classList.remove('input-error');
+  setTaskEditFeedback('');
+  const description = taskEditDescriptionInput.value.trim();
+  const priority = ['low', 'medium', 'high'].includes(taskEditPriorityInput.value) ? taskEditPriorityInput.value : 'medium';
+  const dueDate = taskEditDueDateInput.value;
+
+  try {
+    await editTask(location.column.id, taskEditorState.taskId, { title, description, priority, dueDate });
+    const refreshed = findTaskLocation(taskEditorState.taskId);
+    if (refreshed) {
+      await updateTaskActivities(refreshed.column.id, taskEditorState.taskId, taskEditorState.activities);
+    }
+    if (taskEditorState.returnMode) {
+      openCompletedTasksDialog({ mode: taskEditorState.returnMode });
+    }
+    taskEditDialog.close();
+  } catch (error) {
+    setFeedback(error.message, true);
+  }
+});
+
+taskEditDialog.addEventListener('close', () => {
+  taskEditorState = { taskId: null, activities: [], returnMode: null };
+  taskEditTitleInput.classList.remove('input-error');
+  setTaskEditFeedback('');
+});
+
+taskEditTitleInput.addEventListener('input', () => {
+  if (taskEditTitleInput.value.trim()) {
+    taskEditTitleInput.classList.remove('input-error');
+    if (taskEditFeedback.textContent === 'El título es obligatorio.') {
+      setTaskEditFeedback('');
+    }
+  }
+});
+
+addColumnBtn.addEventListener('click', () => {
+  columnNameInput.value = '';
+  openDialogSafely(columnDialog);
 });
 
 columnDialog?.addEventListener('close', () => {

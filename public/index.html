@@ -46,11 +46,23 @@
 
           <div class="topbar-actions">
             <input id="search-input" type="search" placeholder="Buscar tareas..." aria-label="Buscar tareas" />
+            <button id="toggle-columns-btn" class="btn ghost">Columnas</button>
+            <button id="view-completed-btn" class="btn ghost">Terminadas</button>
             <button id="add-column-btn" class="btn primary">+ Columna</button>
             <button id="reset-app-btn" class="btn ghost">Reiniciar</button>
             <button id="logout-btn" class="btn ghost">Salir</button>
           </div>
         </header>
+
+        <section id="column-visibility-panel" class="visibility-panel glass hidden" aria-label="Visibilidad de columnas">
+          <p class="visibility-title">Mostrar/Ocultar columnas</p>
+          <div id="column-visibility-list" class="visibility-list"></div>
+        </section>
+
+        <section id="hidden-columns-bar" class="hidden-columns-bar glass hidden" aria-label="Columnas ocultas">
+          <p class="visibility-title">Columnas ocultas (clic para mostrar)</p>
+          <div id="hidden-columns-list" class="visibility-list"></div>
+        </section>
 
         <section class="stats glass" aria-label="Resumen del tablero">
           <article>
@@ -81,6 +93,9 @@
             <p class="column-count">0 tareas</p>
           </div>
           <div class="column-actions">
+            <button class="icon-btn toggle-column-visibility" title="Ocultar columna">👁</button>
+            <button class="icon-btn move-column-left" title="Mover columna a la izquierda">←</button>
+            <button class="icon-btn move-column-right" title="Mover columna a la derecha">→</button>
             <button class="icon-btn rename-column" title="Renombrar columna">✎</button>
             <button class="icon-btn add-task" title="Agregar tarea">+</button>
             <button class="icon-btn delete-column" title="Eliminar columna">×</button>
@@ -120,6 +135,7 @@
         <p class="task-description"></p>
         <footer class="task-meta">
           <span class="badge priority"></span>
+          <span class="badge done-status hidden"></span>
           <span class="task-progress"></span>
           <time class="due"></time>
         </footer>
@@ -141,6 +157,67 @@
         <menu>
           <button value="cancel" class="btn ghost">Cancelar</button>
           <button value="default" class="btn primary">Crear</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="completed-dialog">
+      <form method="dialog" class="dialog-form completed-dialog-form">
+        <h2 id="completed-title">Tareas terminadas y almacenadas</h2>
+        <div id="completed-list" class="completed-list"></div>
+        <menu>
+          <button value="default" class="btn primary">Cerrar</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="rename-column-dialog">
+      <form method="dialog" class="dialog-form">
+        <h2>Renombrar columna</h2>
+        <input id="rename-column-input" type="text" maxlength="40" placeholder="Nuevo nombre" required />
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button value="default" class="btn primary">Guardar</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="task-edit-dialog">
+      <form id="task-edit-form" method="dialog" class="dialog-form task-edit-form">
+        <h2>Editar tarea</h2>
+        <input id="task-edit-title" name="title" type="text" maxlength="80" placeholder="Título" required />
+        <p id="task-edit-feedback" class="form-feedback" role="status" aria-live="polite"></p>
+        <textarea id="task-edit-description" name="description" rows="4" maxlength="300" placeholder="Descripción"></textarea>
+        <div class="task-form-row">
+          <select id="task-edit-priority" name="priority">
+            <option value="low">Baja</option>
+            <option value="medium">Media</option>
+            <option value="high">Alta</option>
+          </select>
+          <input id="task-edit-due-date" name="dueDate" type="date" />
+        </div>
+        <section class="task-edit-checklist">
+          <p class="visibility-title">Checklist</p>
+          <ul id="task-edit-activities" class="checklist-items"></ul>
+          <div class="checklist-form">
+            <input id="task-edit-activity-input" class="activity-input" type="text" maxlength="80" placeholder="Nueva actividad..." />
+            <button id="task-edit-add-activity" type="button" class="icon-btn" title="Agregar actividad">+</button>
+          </div>
+        </section>
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button type="submit" class="btn primary">Guardar cambios</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog">
+      <form method="dialog" class="dialog-form">
+        <h2 id="confirm-title">Confirmar acción</h2>
+        <p id="confirm-message" class="muted"></p>
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button id="confirm-ok-btn" value="default" class="btn primary">Confirmar</button>
         </menu>
       </form>
     </dialog>

@@ -190,6 +190,7 @@ function normalizeUsername(username) {
 
 function createDefaultBoard() {
   return {
+    hiddenColumnIds: [],
     columns: [
       { id: crypto.randomUUID(), name: 'Ideas', tasks: [] },
       { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [] },
@@ -203,27 +204,21 @@ function createDefaultBoard() {
 function normalizeBoard(board) {
   if (!board || !Array.isArray(board.columns)) return createDefaultBoard();
   const required = ['Ideas', 'Por Hacer', 'En Progreso', 'Hecho', 'Guardado'];
-  const used = new Set();
-  const columns = [];
+  const columns = board.columns.map((col) => normalizeColumn(col, col?.name || 'Columna'));
 
-  for (const requiredName of required) {
-    const idx = board.columns.findIndex(
-      (col, i) => !used.has(i) && normalizeColumnName(col?.name) === normalizeColumnName(requiredName)
-    );
-
-    if (idx >= 0) {
-      used.add(idx);
-      columns.push(normalizeColumn(board.columns[idx], requiredName));
-    } else {
+  required.forEach((requiredName) => {
+    const exists = columns.some((column) => normalizeColumnName(column.name) === normalizeColumnName(requiredName));
+    if (!exists) {
       columns.push({ id: crypto.randomUUID(), name: requiredName, tasks: [] });
     }
-  }
-
-  board.columns.forEach((col, i) => {
-    if (!used.has(i)) columns.push(normalizeColumn(col, col?.name || 'Columna'));
   });
 
-  return { ...board, columns };
+  const validIds = new Set(columns.map((column) => column.id));
+  const hiddenColumnIds = Array.isArray(board.hiddenColumnIds)
+    ? board.hiddenColumnIds.filter((id) => typeof id === 'string' && validIds.has(id))
+    : [];
+
+  return { ...board, hiddenColumnIds, columns };
 }
 
 function normalizeColumnName(value) {
@@ -241,6 +236,7 @@ function normalizeColumn(column, fallbackName) {
 
 function normalizeTask(task) {
   const activities = normalizeActivities(task?.activities);
+  const doneByChecklist = activities.length > 0 && activities.every((activity) => activity.done);
   return {
     id: typeof task?.id === 'string' && task.id ? task.id : crypto.randomUUID(),
     title: String(task?.title || 'Sin título'),
@@ -248,6 +244,12 @@ function normalizeTask(task) {
     priority: ['low', 'medium', 'high'].includes(task?.priority) ? task.priority : 'medium',
     dueDate: String(task?.dueDate || ''),
     archivedAt: typeof task?.archivedAt === 'string' ? task.archivedAt : '',
+    completedAt:
+      typeof task?.completedAt === 'string' && task.completedAt
+        ? task.completedAt
+        : doneByChecklist
+          ? new Date().toISOString()
+          : '',
     activities,
   };
 }
@@ -257,16 +259,37 @@ function normalizeActivities(activities) {
 
   return activities
     .filter((activity) => activity && typeof activity === 'object')
-    .map((activity) => ({
-      id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
-      title: String(activity.title || '').trim(),
-      done: Boolean(activity.done),
-    }))
+    .map((activity) => {
+      const items = normalizeActivityItems(activity.items);
+      const done = items.length > 0 ? items.every((item) => item.done) : Boolean(activity.done);
+      return {
+        id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
+        title: String(activity.title || '').trim(),
+        done,
+        items,
+      };
+    })
     .filter((activity) => activity.title.length > 0);
+}
+
+function normalizeActivityItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : crypto.randomUUID(),
+      title: String(item.title || '').trim(),
+      done: Boolean(item.done),
+    }))
+    .filter((item) => item.title.length > 0);
 }
 
 function isValidBoard(board) {
   if (!board || !Array.isArray(board.columns)) return false;
+  if (board.hiddenColumnIds !== undefined) {
+    if (!Array.isArray(board.hiddenColumnIds)) return false;
+    if (board.hiddenColumnIds.some((id) => typeof id !== 'string')) return false;
+  }
 
   for (const column of board.columns) {
     if (!column || typeof column.id !== 'string' || typeof column.name !== 'string') return false;
@@ -278,11 +301,19 @@ function isValidBoard(board) {
       if (!['low', 'medium', 'high'].includes(task.priority)) return false;
       if (typeof task.dueDate !== 'string') return false;
       if (task.archivedAt !== undefined && typeof task.archivedAt !== 'string') return false;
+      if (task.completedAt !== undefined && typeof task.completedAt !== 'string') return false;
       if (task.activities !== undefined) {
         if (!Array.isArray(task.activities)) return false;
         for (const activity of task.activities) {
           if (!activity || typeof activity.id !== 'string' || typeof activity.title !== 'string') return false;
           if (typeof activity.done !== 'boolean') return false;
+          if (activity.items !== undefined) {
+            if (!Array.isArray(activity.items)) return false;
+            for (const item of activity.items) {
+              if (!item || typeof item.id !== 'string' || typeof item.title !== 'string') return false;
+              if (typeof item.done !== 'boolean') return false;
+            }
+          }
         }
       }
     }

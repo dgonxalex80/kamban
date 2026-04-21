@@ -76,6 +76,31 @@ También puedes fijar el puerto manualmente:
 PORT=3010 npm run dev
 ```
 
+### Acceder Desde Celular En La Misma Red Wi-Fi (sin Docker)
+
+1) En el PC servidor, inicia la app con:
+
+```bash
+npm run dev
+```
+
+2) Obtén la IP local del PC servidor:
+
+```bash
+hostname -I
+```
+
+3) Desde el celular (misma red Wi-Fi), abre:
+
+```text
+http://IP_DEL_PC_SERVIDOR:3000
+```
+
+Ejemplo: `http://192.168.1.25:3000`
+
+Si usas otro puerto, reemplaza `3000` por ese puerto.
+Si no abre, permite el puerto en el firewall del PC servidor.
+
 ## Docker
 
 ### Requisitos
@@ -104,7 +129,7 @@ Para conservar usuarios y tablero al reiniciar el contenedor:
 docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" -v $(pwd)/data.sqlite:/app/data.sqlite kamban-flow
 ```
 
-### Acceder Desde Otro PC En La Misma Red Wi-Fi
+### Acceder Desde Otro PC O Celular En La Misma Red Wi-Fi
 
 1) En el PC donde corre Docker, inicia la app:
 
@@ -118,7 +143,7 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" ka
 hostname -I
 ```
 
-3) Desde el otro PC conectado a la misma red, abre:
+3) Desde el otro PC o celular conectado a la misma red, abre:
 
 ```text
 http://IP_DEL_PC_SERVIDOR:3000
@@ -161,14 +186,38 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga
 - Inicio/cierre de sesión con cookies
 - Tablero personal por usuario en SQLite
 - Flujo base: `Ideas -> Por Hacer -> En Progreso -> Hecho -> Guardado`
-- Al mover una tarea a `Guardado`, desaparece del flujo visible y queda archivada (consultable desde `Guardado`)
+- Reordenamiento de columnas (botones y arrastre)
+- Ocultar/mostrar columnas con 1 clic
+- Barra de columnas ocultas para volver a mostrarlas rápido (incluye `Hecho/Terminada`)
+- Al mover una tarea a `Guardado`, desaparece del flujo visible y queda archivada
 - CRUD de columnas y tareas
-- Checklist de actividades por cada tarea (seguimiento interno de avance)
+- Edición completa de tareas en modal (`título`, `descripción`, `prioridad`, `fecha`, `checklist`)
+- Checklist de actividades por tarea
+- Sub-actividades dentro de cada actividad (checklist anidada)
+- En tarjetas, las sub-actividades se muestran en lista simple (nombre, una tras otra)
+- Marcado automático de tarea terminada al completar checklist
+- Consulta de tareas terminadas y almacenadas desde botón `Terminadas`
 - Renombrado de columnas
 - Botón para reiniciar el tablero al estado base
 - Drag & drop de tareas entre columnas
 - Filtro de tareas
 - Métricas del tablero
+
+## Actualizar La App
+
+Si ya tienes el proyecto clonado y quieres traer la última versión:
+
+```bash
+git pull
+npm install
+npm run dev
+```
+
+Opcional (respaldo rápido de base de datos antes de actualizar):
+
+```bash
+cp data.sqlite data.sqlite.bak
+```
 
 ## Variables opcionales
 
