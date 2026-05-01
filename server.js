@@ -266,6 +266,8 @@ function normalizeActivities(activities) {
         id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
         title: String(activity.title || '').trim(),
         done,
+        dueDate: normalizeDateString(activity.dueDate),
+        reminderDays: normalizeReminderDays(activity.reminderDays),
         items,
       };
     })
@@ -282,6 +284,18 @@ function normalizeActivityItems(items) {
       done: Boolean(item.done),
     }))
     .filter((item) => item.title.length > 0);
+}
+
+function normalizeDateString(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+}
+
+function normalizeReminderDays(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0 || num > 30) return 0;
+  return num;
 }
 
 function isValidBoard(board) {
@@ -307,6 +321,8 @@ function isValidBoard(board) {
         for (const activity of task.activities) {
           if (!activity || typeof activity.id !== 'string' || typeof activity.title !== 'string') return false;
           if (typeof activity.done !== 'boolean') return false;
+          if (activity.dueDate !== undefined && typeof activity.dueDate !== 'string') return false;
+          if (activity.reminderDays !== undefined && !Number.isInteger(activity.reminderDays)) return false;
           if (activity.items !== undefined) {
             if (!Array.isArray(activity.items)) return false;
             for (const item of activity.items) {
