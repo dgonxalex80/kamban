@@ -46,7 +46,14 @@
 
           <div class="topbar-actions">
             <input id="search-input" type="search" placeholder="Buscar tareas..." aria-label="Buscar tareas" />
-            <button id="toggle-columns-btn" class="btn ghost">Columnas</button>
+            <select id="theme-select" class="theme-select" aria-label="Tema visual">
+              <option value="default">Azul turquesa</option>
+              <option value="dark-blue">Azul oscuro</option>
+              <option value="light-blue">Azul claro</option>
+              <option value="white">Blanco</option>
+            </select>
+            <button id="toggle-columns-btn" class="btn ghost">Kanban</button>
+            <button id="view-calendar-btn" class="btn ghost">Calendario</button>
             <button id="view-completed-btn" class="btn ghost">Terminadas</button>
             <button id="add-column-btn" class="btn primary">+ Columna</button>
             <button id="reset-app-btn" class="btn ghost">Reiniciar</button>
@@ -77,6 +84,20 @@
             <p>Finalizadas</p>
             <strong id="stat-done">0</strong>
           </article>
+        </section>
+
+        <section id="calendar-panel" class="calendar-panel glass hidden" aria-label="Vista de calendario">
+          <header class="calendar-header">
+            <button id="back-to-board-btn" type="button" class="btn ghost">← Kanban</button>
+            <button id="calendar-prev-btn" type="button" class="btn ghost">◀</button>
+            <h2 id="calendar-month-label">Mes</h2>
+            <button id="calendar-next-btn" type="button" class="btn ghost">▶</button>
+          </header>
+          <div id="calendar-grid" class="calendar-grid"></div>
+          <div class="calendar-reminders">
+            <p class="visibility-title">Recordatorios</p>
+            <ul id="reminders-list" class="reminders-list"></ul>
+          </div>
         </section>
 
         <section id="board" class="board" aria-label="Tablero Kanban"></section>

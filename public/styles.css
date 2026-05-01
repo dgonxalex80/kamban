@@ -11,6 +11,45 @@
   --border: rgba(255, 255, 255, 0.14);
 }
 
+body[data-theme='dark-blue'] {
+  --bg-a: #061833;
+  --bg-b: #0b2e63;
+  --paper: rgba(8, 26, 52, 0.88);
+  --text: #edf5ff;
+  --muted: #a7c0df;
+  --primary: #2f7ef7;
+  --accent: #57c5ff;
+  --danger: #ff5f7b;
+  --card: rgba(6, 21, 43, 0.94);
+  --border: rgba(168, 205, 255, 0.2);
+}
+
+body[data-theme='light-blue'] {
+  --bg-a: #d8ecff;
+  --bg-b: #b9ddff;
+  --paper: rgba(246, 251, 255, 0.9);
+  --text: #12304e;
+  --muted: #4d7092;
+  --primary: #1f74e0;
+  --accent: #0f9ad6;
+  --danger: #d63a56;
+  --card: rgba(255, 255, 255, 0.95);
+  --border: rgba(17, 61, 101, 0.2);
+}
+
+body[data-theme='white'] {
+  --bg-a: #f6f8fb;
+  --bg-b: #ffffff;
+  --paper: rgba(255, 255, 255, 0.96);
+  --text: #1b2330;
+  --muted: #5c6675;
+  --primary: #2256d1;
+  --accent: #178f75;
+  --danger: #cb2f48;
+  --card: rgba(255, 255, 255, 0.98);
+  --border: rgba(21, 31, 45, 0.16);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -142,9 +181,14 @@ textarea,
 select {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.24);
+  background: color-mix(in srgb, var(--paper) 78%, #000 22%);
   color: var(--text);
   padding: 0.48rem 0.62rem;
+}
+
+.theme-select {
+  min-width: 138px;
+  font-size: 0.8rem;
 }
 
 input[type='search'] {
@@ -188,6 +232,79 @@ input[type='search'] {
 .hidden-columns-bar {
   margin-top: 0.55rem;
   padding: 0.45rem 0.7rem;
+}
+
+.calendar-panel {
+  margin-top: 0.55rem;
+  padding: 0.6rem 0.7rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.calendar-header h2 {
+  min-width: 220px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.calendar-day,
+.calendar-weekday {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 84px;
+  padding: 0.3rem;
+}
+
+.calendar-weekday {
+  min-height: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-day-number {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.calendar-event {
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
+  background: rgba(0, 194, 168, 0.18);
+  color: #a8ffe7;
+  border-radius: 6px;
+  padding: 0.08rem 0.3rem;
+}
+
+.calendar-day.today {
+  outline: 1px solid var(--accent);
+}
+
+.calendar-reminders {
+  border-top: 1px solid var(--border);
+  padding-top: 0.35rem;
+}
+
+.reminders-list {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.75rem;
 }
 
 .hidden-column-chip {
@@ -410,6 +527,13 @@ input[type='search'] {
   color: #d2e3f4;
 }
 
+.activity-meta-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+}
+
 .checklist-item input[type='checkbox'] {
   accent-color: var(--accent);
 }
@@ -607,5 +731,15 @@ menu {
   .column {
     flex: 0 0 78vw;
     min-width: 78vw;
+  }
+
+  .calendar-grid {
+    gap: 0.18rem;
+  }
+
+  .calendar-day,
+  .calendar-weekday {
+    min-height: 64px;
+    padding: 0.2rem;
   }
 }

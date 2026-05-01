@@ -15,6 +15,9 @@ let state = createDefaultBoard();
 let draggedTask = { taskId: null, fromColumnId: null };
 let draggedColumnId = null;
 let currentUser = null;
+let currentView = 'board';
+let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let columnPanelWasOpen = false;
 
 const authPanelEl = document.getElementById('auth-panel');
 const appPanelEl = document.getElementById('app-panel');
@@ -27,7 +30,9 @@ const resetAppBtn = document.getElementById('reset-app-btn');
 
 const boardEl = document.getElementById('board');
 const searchInput = document.getElementById('search-input');
+const themeSelect = document.getElementById('theme-select');
 const toggleColumnsBtn = document.getElementById('toggle-columns-btn');
+const viewCalendarBtn = document.getElementById('view-calendar-btn');
 const viewCompletedBtn = document.getElementById('view-completed-btn');
 const addColumnBtn = document.getElementById('add-column-btn');
 const columnDialog = document.getElementById('column-dialog');
@@ -59,10 +64,19 @@ const confirmOkBtn = document.getElementById('confirm-ok-btn');
 const statTotal = document.getElementById('stat-total');
 const statProgress = document.getElementById('stat-progress');
 const statDone = document.getElementById('stat-done');
+const statsEl = document.querySelector('.stats');
+const calendarPanel = document.getElementById('calendar-panel');
+const calendarMonthLabel = document.getElementById('calendar-month-label');
+const calendarPrevBtn = document.getElementById('calendar-prev-btn');
+const calendarNextBtn = document.getElementById('calendar-next-btn');
+const backToBoardBtn = document.getElementById('back-to-board-btn');
+const calendarGrid = document.getElementById('calendar-grid');
+const remindersList = document.getElementById('reminders-list');
 
 const columnTemplate = document.getElementById('column-template');
 const taskTemplate = document.getElementById('task-template');
 let taskEditorState = { taskId: null, activities: [], returnMode: null };
+const themeIds = new Set(['default', 'dark-blue', 'light-blue', 'white']);
 
 start();
 
@@ -118,6 +132,8 @@ function normalizeTaskActivities(activities) {
         id: typeof activity.id === 'string' && activity.id ? activity.id : crypto.randomUUID(),
         title: String(activity.title || '').trim(),
         done,
+        dueDate: normalizeDateString(activity.dueDate),
+        reminderDays: normalizeReminderDays(activity.reminderDays),
         items,
       };
     })
@@ -134,6 +150,18 @@ function normalizeActivityItems(items) {
       done: Boolean(item.done),
     }))
     .filter((item) => item.title.length > 0);
+}
+
+function normalizeDateString(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+}
+
+function normalizeReminderDays(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0 || num > 30) return 0;
+  return num;
 }
 
 async function persistBoard() {
@@ -156,7 +184,25 @@ function showApp() {
   authPanelEl.classList.add('hidden');
   appPanelEl.classList.remove('hidden');
   welcomeEl.textContent = `Hola, ${currentUser.username}`;
+  initializeTheme();
   renderBoard();
+  setView(currentView);
+}
+
+function getThemeStorageKey() {
+  const userName = currentUser?.username || 'anon';
+  return `kamban.theme.${userName}`;
+}
+
+function applyTheme(themeId) {
+  const safeTheme = themeIds.has(themeId) ? themeId : 'default';
+  document.body.dataset.theme = safeTheme;
+  if (themeSelect) themeSelect.value = safeTheme;
+}
+
+function initializeTheme() {
+  const stored = localStorage.getItem(getThemeStorageKey()) || 'default';
+  applyTheme(stored);
 }
 
 function setFeedback(message, isError = false) {
@@ -309,6 +355,12 @@ function priorityLabel(priority) {
   return 'Media';
 }
 
+function reminderLabel(days) {
+  if (!days) return 'Sin recordatorio';
+  if (days === 1) return '1 día antes';
+  return `${days} días antes`;
+}
+
 function normalizeColumnName(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -397,8 +449,11 @@ function renderTaskEditorActivities() {
     item.className = 'checklist-item';
     const label = document.createElement('label');
     const toggle = document.createElement('input');
-    const text = document.createElement('span');
+    const text = document.createElement('input');
     const remove = document.createElement('button');
+    const metaRow = document.createElement('div');
+    const dateInput = document.createElement('input');
+    const reminderSelect = document.createElement('select');
     const nestedWrap = document.createElement('details');
     const nestedSummary = document.createElement('summary');
     const nestedList = document.createElement('ul');
@@ -410,7 +465,11 @@ function renderTaskEditorActivities() {
 
     toggle.type = 'checkbox';
     toggle.checked = activity.done;
-    text.textContent = activity.title;
+    text.type = 'text';
+    text.className = 'activity-input';
+    text.maxLength = 80;
+    text.value = activity.title;
+    text.placeholder = 'Nombre de actividad';
     remove.type = 'button';
     remove.className = 'icon-btn delete-activity';
     remove.title = 'Eliminar actividad';
@@ -429,9 +488,45 @@ function renderTaskEditorActivities() {
       renderTaskEditorActivities();
     });
 
+    text.addEventListener('change', () => {
+      const nextTitle = text.value.trim();
+      if (!nextTitle) {
+        text.value = activity.title;
+        return;
+      }
+      taskEditorState.activities = taskEditorState.activities.map((entry) =>
+        entry.id === activity.id ? { ...entry, title: nextTitle } : entry
+      );
+    });
+
     remove.addEventListener('click', () => {
       taskEditorState.activities = taskEditorState.activities.filter((entry) => entry.id !== activity.id);
       renderTaskEditorActivities();
+    });
+
+    metaRow.className = 'activity-meta-row';
+    dateInput.type = 'date';
+    dateInput.className = 'activity-date';
+    dateInput.value = normalizeDateString(activity.dueDate);
+    reminderSelect.className = 'activity-reminder';
+    [0, 1, 2, 3, 7].forEach((days) => {
+      const option = document.createElement('option');
+      option.value = String(days);
+      option.textContent = reminderLabel(days);
+      if (normalizeReminderDays(activity.reminderDays) === days) option.selected = true;
+      reminderSelect.append(option);
+    });
+    dateInput.addEventListener('change', () => {
+      const date = normalizeDateString(dateInput.value);
+      taskEditorState.activities = taskEditorState.activities.map((entry) =>
+        entry.id === activity.id ? { ...entry, dueDate: date } : entry
+      );
+    });
+    reminderSelect.addEventListener('change', () => {
+      const days = normalizeReminderDays(reminderSelect.value);
+      taskEditorState.activities = taskEditorState.activities.map((entry) =>
+        entry.id === activity.id ? { ...entry, reminderDays: days } : entry
+      );
     });
 
     nestedWrap.className = 'nested-checklist';
@@ -460,12 +555,16 @@ function renderTaskEditorActivities() {
         subEl.className = 'checklist-item nested-item';
         const subLabel = document.createElement('label');
         const subToggle = document.createElement('input');
-        const subText = document.createElement('span');
+        const subText = document.createElement('input');
         const subRemove = document.createElement('button');
 
         subToggle.type = 'checkbox';
         subToggle.checked = subItem.done;
-        subText.textContent = subItem.title;
+        subText.type = 'text';
+        subText.className = 'activity-input';
+        subText.maxLength = 80;
+        subText.value = subItem.title;
+        subText.placeholder = 'Nombre de sub-actividad';
         subRemove.type = 'button';
         subRemove.className = 'icon-btn delete-activity';
         subRemove.title = 'Eliminar sub-actividad';
@@ -480,6 +579,21 @@ function renderTaskEditorActivities() {
             return { ...entry, items: nextItems, done: nextItems.length > 0 ? nextItems.every((value) => value.done) : entry.done };
           });
           renderTaskEditorActivities();
+        });
+
+        subText.addEventListener('change', () => {
+          const nextTitle = subText.value.trim();
+          if (!nextTitle) {
+            subText.value = subItem.title;
+            return;
+          }
+          taskEditorState.activities = taskEditorState.activities.map((entry) => {
+            if (entry.id !== activity.id) return entry;
+            const nextItems = normalizeActivityItems(entry.items).map((value) =>
+              value.id === subItem.id ? { ...value, title: nextTitle } : value
+            );
+            return { ...entry, items: nextItems };
+          });
         });
 
         subRemove.addEventListener('click', () => {
@@ -509,7 +623,8 @@ function renderTaskEditorActivities() {
     });
 
     label.append(toggle, text);
-    item.append(label, remove);
+    metaRow.append(dateInput, reminderSelect);
+    item.append(label, remove, metaRow);
     nestedForm.append(nestedInput, nestedAddBtn);
     nestedWrap.append(nestedSummary, nestedList, nestedForm);
     item.append(nestedWrap);
@@ -756,14 +871,22 @@ function createTaskElement(task, columnId) {
     openTaskEditor(task.id);
   });
 
+  taskEl.addEventListener('dblclick', (event) => {
+    if (event.target.closest('button, input, textarea, select, summary, form')) return;
+    openTaskEditor(task.id);
+  });
+
   checklistFormEl.addEventListener('submit', (event) => {
     event.preventDefault();
     const title = checklistInputEl.value.trim();
     if (!title) return;
 
-    const nextActivities = [...activities, { id: crypto.randomUUID(), title, done: false, items: [] }];
-    updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
-  });
+        const nextActivities = [
+          ...activities,
+          { id: crypto.randomUUID(), title, done: false, dueDate: '', reminderDays: 0, items: [] },
+        ];
+        updateTaskActivities(columnId, task.id, nextActivities).catch((error) => setFeedback(error.message, true));
+      });
 
   return taskEl;
 }
@@ -785,9 +908,10 @@ function createColumnElement(column) {
   const isGuardado = isStoredColumn(column);
   const archivedTasks = isGuardado ? column.tasks : column.tasks.filter((task) => isArchivedTask(task));
   const activeTasks = isGuardado ? [] : column.tasks.filter((task) => !isArchivedTask(task));
+  const sourceTasks = isGuardado ? archivedTasks : activeTasks;
 
   const query = getSearchQuery();
-  const visibleTasks = activeTasks.filter((task) => {
+  const visibleTasks = sourceTasks.filter((task) => {
     if (!query) return true;
     const activitiesText = normalizeTaskActivities(task.activities)
       .flatMap((activity) => [
@@ -965,6 +1089,7 @@ function renderBoard() {
   visibleColumns.forEach((column) => boardEl.append(createColumnElement(column)));
   renderColumnVisibilityPanel();
   renderHiddenColumnsBar();
+  renderCalendarView();
   updateStats();
 }
 
@@ -1011,6 +1136,11 @@ function renderHiddenColumnsBar() {
     return;
   }
 
+  if (currentView === 'calendar') {
+    hiddenColumnsBar.classList.add('hidden');
+    return;
+  }
+
   hiddenColumnsBar.classList.remove('hidden');
   hiddenIds.forEach((columnId) => {
     const column = getColumnById(columnId);
@@ -1023,6 +1153,151 @@ function renderHiddenColumnsBar() {
       toggleColumnVisibility(column.id, true).catch((error) => setFeedback(error.message, true));
     });
     hiddenColumnsList.append(btn);
+  });
+}
+
+function setView(nextView) {
+  if (currentView === 'board' && nextView === 'calendar') {
+    columnPanelWasOpen = !columnVisibilityPanel.classList.contains('hidden');
+  }
+  currentView = nextView === 'calendar' ? 'calendar' : 'board';
+  const isCalendar = currentView === 'calendar';
+  boardEl.classList.toggle('hidden', isCalendar);
+  statsEl.classList.toggle('hidden', isCalendar);
+  if (isCalendar) {
+    columnVisibilityPanel.classList.add('hidden');
+  } else if (columnPanelWasOpen) {
+    columnVisibilityPanel.classList.remove('hidden');
+  }
+  hiddenColumnsBar.classList.toggle('hidden', isCalendar || (state.hiddenColumnIds || []).length === 0);
+  calendarPanel.classList.toggle('hidden', !isCalendar);
+  viewCalendarBtn.classList.toggle('primary', isCalendar);
+  viewCalendarBtn.classList.toggle('ghost', !isCalendar);
+  if (isCalendar) renderCalendarView();
+}
+
+function formatDateIsoLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function collectCalendarEvents() {
+  const events = [];
+  state.columns.forEach((column) => {
+    column.tasks.forEach((task) => {
+      const taskDue = normalizeDateString(task.dueDate);
+      if (taskDue) {
+        events.push({
+          date: taskDue,
+          title: task.title,
+          type: 'task',
+          done: isTaskCompleted(task),
+          reminderDays: 0,
+        });
+      }
+      normalizeTaskActivities(task.activities).forEach((activity) => {
+        const activityDue = normalizeDateString(activity.dueDate);
+        if (!activityDue) return;
+        events.push({
+          date: activityDue,
+          title: `${task.title} / ${activity.title}`,
+          type: 'activity',
+          done: Boolean(activity.done),
+          reminderDays: normalizeReminderDays(activity.reminderDays),
+        });
+      });
+    });
+  });
+  return events;
+}
+
+function renderCalendarView() {
+  const year = calendarCursor.getFullYear();
+  const month = calendarCursor.getMonth();
+  calendarMonthLabel.textContent = calendarCursor.toLocaleDateString('es-CO', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const events = collectCalendarEvents();
+  const eventsByDate = new Map();
+  events.forEach((event) => {
+    const list = eventsByDate.get(event.date) || [];
+    list.push(event);
+    eventsByDate.set(event.date, list);
+  });
+
+  calendarGrid.innerHTML = '';
+  ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].forEach((label) => {
+    const weekday = document.createElement('div');
+    weekday.className = 'calendar-weekday';
+    weekday.textContent = label;
+    calendarGrid.append(weekday);
+  });
+
+  for (let i = 0; i < startWeekday; i += 1) {
+    const blank = document.createElement('div');
+    blank.className = 'calendar-day';
+    calendarGrid.append(blank);
+  }
+
+  const todayIso = formatDateIsoLocal(new Date());
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const cellDate = new Date(year, month, day);
+    const iso = formatDateIsoLocal(cellDate);
+    const cell = document.createElement('div');
+    cell.className = 'calendar-day';
+    if (iso === todayIso) cell.classList.add('today');
+    const number = document.createElement('div');
+    number.className = 'calendar-day-number';
+    number.textContent = String(day);
+    cell.append(number);
+
+    const dayEvents = eventsByDate.get(iso) || [];
+    dayEvents.slice(0, 3).forEach((event) => {
+      const tag = document.createElement('div');
+      tag.className = 'calendar-event';
+      tag.textContent = event.type === 'activity' ? `Act: ${event.title}` : `Tar: ${event.title}`;
+      cell.append(tag);
+    });
+    if (dayEvents.length > 3) {
+      const more = document.createElement('div');
+      more.className = 'calendar-event';
+      more.textContent = `+${dayEvents.length - 3} más`;
+      cell.append(more);
+    }
+    calendarGrid.append(cell);
+  }
+
+  remindersList.innerHTML = '';
+  const now = new Date(`${todayIso}T00:00:00`);
+  const reminders = events
+    .filter((event) => event.reminderDays > 0 && !event.done)
+    .map((event) => {
+      const due = new Date(`${event.date}T00:00:00`);
+      const diffDays = Math.round((due - now) / (1000 * 60 * 60 * 24));
+      return { ...event, diffDays };
+    })
+    .filter((event) => event.diffDays <= event.reminderDays)
+    .sort((a, b) => a.diffDays - b.diffDays);
+
+  if (!reminders.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'Sin recordatorios pendientes para este rango.';
+    remindersList.append(empty);
+    return;
+  }
+
+  reminders.slice(0, 12).forEach((event) => {
+    const item = document.createElement('li');
+    const when = event.diffDays < 0 ? `Vencida hace ${Math.abs(event.diffDays)} día(s)` : `Vence en ${event.diffDays} día(s)`;
+    item.textContent = `${event.title} — ${formatDate(event.date)} (${when})`;
+    remindersList.append(item);
   });
 }
 
@@ -1114,16 +1389,38 @@ function openCompletedTasksDialog(options = {}) {
 
 searchInput.addEventListener('input', renderBoard);
 toggleColumnsBtn.addEventListener('click', () => {
+  if (currentView === 'calendar') setView('board');
   columnVisibilityPanel.classList.toggle('hidden');
+  columnPanelWasOpen = !columnVisibilityPanel.classList.contains('hidden');
+});
+viewCalendarBtn.addEventListener('click', () => {
+  setView(currentView === 'calendar' ? 'board' : 'calendar');
 });
 viewCompletedBtn.addEventListener('click', openCompletedTasksDialog);
+calendarPrevBtn.addEventListener('click', () => {
+  calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1);
+  renderCalendarView();
+});
+calendarNextBtn.addEventListener('click', () => {
+  calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1);
+  renderCalendarView();
+});
+backToBoardBtn.addEventListener('click', () => setView('board'));
+themeSelect?.addEventListener('change', () => {
+  const nextTheme = themeIds.has(themeSelect.value) ? themeSelect.value : 'default';
+  applyTheme(nextTheme);
+  localStorage.setItem(getThemeStorageKey(), nextTheme);
+});
 function addActivityFromEditorInput() {
   const title = taskEditActivityInput.value.trim();
   if (!title) {
     setTaskEditFeedback('Escribe un nombre para la actividad.', true);
     return false;
   }
-  taskEditorState.activities = [...taskEditorState.activities, { id: crypto.randomUUID(), title, done: false, items: [] }];
+  taskEditorState.activities = [
+    ...taskEditorState.activities,
+    { id: crypto.randomUUID(), title, done: false, dueDate: '', reminderDays: 0, items: [] },
+  ];
   taskEditActivityInput.value = '';
   setTaskEditFeedback('');
   renderTaskEditorActivities();
@@ -1197,7 +1494,7 @@ addColumnBtn.addEventListener('click', () => {
 });
 
 columnDialog?.addEventListener('close', () => {
-  if (columnDialog.returnValue === 'cancel') return;
+  if (columnDialog.returnValue !== 'default') return;
   const name = columnNameInput.value.trim();
   if (!name) return;
 
