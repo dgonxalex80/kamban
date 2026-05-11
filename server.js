@@ -192,11 +192,11 @@ function createDefaultBoard() {
   return {
     hiddenColumnIds: [],
     columns: [
-      { id: crypto.randomUUID(), name: 'Ideas', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [] },
-      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Hecho', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Guardado', tasks: [] },
+      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null },
     ],
   };
 }
@@ -230,6 +230,7 @@ function normalizeColumn(column, fallbackName) {
   return {
     id: typeof column?.id === 'string' && column.id ? column.id : crypto.randomUUID(),
     name: String(fallbackName || column?.name || 'Columna'),
+    wipLimit: normalizeWipLimit(column?.wipLimit),
     tasks,
   };
 }
@@ -298,6 +299,13 @@ function normalizeReminderDays(value) {
   return num;
 }
 
+function normalizeWipLimit(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0 || num > 99) return null;
+  return num;
+}
+
 function isValidBoard(board) {
   if (!board || !Array.isArray(board.columns)) return false;
   if (board.hiddenColumnIds !== undefined) {
@@ -307,6 +315,9 @@ function isValidBoard(board) {
 
   for (const column of board.columns) {
     if (!column || typeof column.id !== 'string' || typeof column.name !== 'string') return false;
+    if (column.wipLimit !== undefined && column.wipLimit !== null) {
+      if (!Number.isInteger(column.wipLimit) || column.wipLimit <= 0 || column.wipLimit > 99) return false;
+    }
     if (!Array.isArray(column.tasks)) return false;
 
     for (const task of column.tasks) {

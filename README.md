@@ -76,6 +76,22 @@ También puedes fijar el puerto manualmente:
 PORT=3010 npm run dev
 ```
 
+## Integrar Al Menu De Ubuntu
+
+Instala el lanzador local:
+
+```bash
+./scripts/install-ubuntu-launcher.sh
+```
+
+Luego busca `Kamban Flow` en el menu de aplicaciones de Ubuntu.
+
+El lanzador inicia la app con `npm start` y abre `http://localhost:3000` en el navegador. Si necesitas otro puerto:
+
+```bash
+PORT=3010 ./scripts/kamban-launcher.sh
+```
+
 ### Acceder Desde Celular En La Misma Red Wi-Fi (sin Docker)
 
 1) En el PC servidor, inicia la app con:

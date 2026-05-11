@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Kamban Flow">
+  <rect width="128" height="128" rx="24" fill="#1f2937"/>
+  <rect x="22" y="24" width="24" height="80" rx="6" fill="#38bdf8"/>
+  <rect x="52" y="24" width="24" height="80" rx="6" fill="#f59e0b"/>
+  <rect x="82" y="24" width="24" height="80" rx="6" fill="#22c55e"/>
+  <path d="M33 42h62M33 64h62M33 86h62" stroke="#f9fafb" stroke-width="8" stroke-linecap="round" opacity=".9"/>
+</svg>

@@ -53,6 +53,7 @@
               <option value="white">Blanco</option>
             </select>
             <button id="toggle-columns-btn" class="btn ghost">Kamban</button>
+            <button id="view-wip-alerts-btn" class="btn ghost">Saturadas</button>
             <button id="view-calendar-btn" class="btn ghost">Calendario</button>
             <button id="view-completed-btn" class="btn ghost">Terminadas</button>
             <button id="add-column-btn" class="btn primary">+ Columna</button>
@@ -117,6 +118,7 @@
             <button class="icon-btn toggle-column-visibility" title="Ocultar columna">👁</button>
             <button class="icon-btn move-column-left" title="Mover columna a la izquierda">←</button>
             <button class="icon-btn move-column-right" title="Mover columna a la derecha">→</button>
+            <button class="icon-btn set-column-wip" title="Configurar límite WIP">W</button>
             <button class="icon-btn rename-column" title="Renombrar columna">✎</button>
             <button class="icon-btn add-task" title="Agregar tarea">+</button>
             <button class="icon-btn delete-column" title="Eliminar columna">×</button>
@@ -196,6 +198,18 @@
       <form method="dialog" class="dialog-form">
         <h2>Renombrar columna</h2>
         <input id="rename-column-input" type="text" maxlength="40" placeholder="Nuevo nombre" required />
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button value="default" class="btn primary">Guardar</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="wip-dialog">
+      <form method="dialog" class="dialog-form">
+        <h2>Límite WIP</h2>
+        <input id="wip-limit-input" type="number" min="1" max="99" placeholder="Ej: 5" />
+        <p class="muted">Deja vacío para quitar el límite.</p>
         <menu>
           <button value="cancel" class="btn ghost">Cancelar</button>
           <button value="default" class="btn primary">Guardar</button>

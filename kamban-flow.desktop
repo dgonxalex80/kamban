@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Kamban Flow
+Comment=Tablero Kanban local con Express y SQLite
+Exec=/home/deg/Documentos/PERSONALES/ESCUELA/repository/kamban/scripts/kamban-launcher.sh
+Icon=/home/deg/Documentos/PERSONALES/ESCUELA/repository/kamban/assets/kamban-flow.svg
+Terminal=false
+Categories=Office;ProjectManagement;
+StartupNotify=true

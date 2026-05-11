@@ -2,11 +2,11 @@ function createDefaultBoard() {
   return {
     hiddenColumnIds: [],
     columns: [
-      { id: crypto.randomUUID(), name: 'Ideas', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [] },
-      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Hecho', tasks: [] },
-      { id: crypto.randomUUID(), name: 'Guardado', tasks: [] },
+      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null },
     ],
   };
 }
@@ -18,6 +18,7 @@ let currentUser = null;
 let currentView = 'board';
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let columnPanelWasOpen = false;
+let showOnlyWipAlerts = false;
 
 const authPanelEl = document.getElementById('auth-panel');
 const appPanelEl = document.getElementById('app-panel');
@@ -32,6 +33,7 @@ const boardEl = document.getElementById('board');
 const searchInput = document.getElementById('search-input');
 const themeSelect = document.getElementById('theme-select');
 const toggleColumnsBtn = document.getElementById('toggle-columns-btn');
+const viewWipAlertsBtn = document.getElementById('view-wip-alerts-btn');
 const viewCalendarBtn = document.getElementById('view-calendar-btn');
 const viewCompletedBtn = document.getElementById('view-completed-btn');
 const addColumnBtn = document.getElementById('add-column-btn');
@@ -46,6 +48,8 @@ const completedList = document.getElementById('completed-list');
 const completedTitle = document.getElementById('completed-title');
 const renameColumnDialog = document.getElementById('rename-column-dialog');
 const renameColumnInput = document.getElementById('rename-column-input');
+const wipDialog = document.getElementById('wip-dialog');
+const wipLimitInput = document.getElementById('wip-limit-input');
 const taskEditDialog = document.getElementById('task-edit-dialog');
 const taskEditForm = document.getElementById('task-edit-form');
 const taskEditTitleInput = document.getElementById('task-edit-title');
@@ -161,6 +165,13 @@ function normalizeDateString(value) {
 function normalizeReminderDays(value) {
   const num = Number(value);
   if (!Number.isInteger(num) || num < 0 || num > 30) return 0;
+  return num;
+}
+
+function normalizeWipLimit(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0 || num > 99) return null;
   return num;
 }
 
@@ -383,6 +394,35 @@ function isColumnHidden(columnId) {
 
 function getColumnById(columnId) {
   return state.columns.find((column) => column.id === columnId) || null;
+}
+
+function isWipExceeded(column) {
+  const limit = normalizeWipLimit(column?.wipLimit);
+  if (!limit) return false;
+  const activeCount = (column?.tasks || []).filter((task) => !isArchivedTask(task)).length;
+  return activeCount > limit;
+}
+
+function getWipStatus(column) {
+  const limit = normalizeWipLimit(column?.wipLimit);
+  if (!limit) return { limited: false, atLimit: false, exceeded: false, activeCount: 0, limit: null, overload: 0 };
+  const activeCount = (column?.tasks || []).filter((task) => !isArchivedTask(task)).length;
+  const overload = activeCount - limit;
+  return {
+    limited: true,
+    atLimit: overload === 0,
+    exceeded: overload > 0,
+    activeCount,
+    limit,
+    overload: overload > 0 ? overload : 0,
+  };
+}
+
+function canAddTaskToColumn(column) {
+  const limit = normalizeWipLimit(column?.wipLimit);
+  if (!limit) return true;
+  const activeCount = (column?.tasks || []).filter((task) => !isArchivedTask(task)).length;
+  return activeCount < limit;
 }
 
 function getDoneColumn() {
@@ -735,6 +775,17 @@ async function moveTask(fromColumnId, taskId, toColumnId) {
 
   if (!movingTask) return;
 
+  const targetColumn = getColumnById(toColumnId);
+  if (!targetColumn) return;
+  if (!canAddTaskToColumn(targetColumn)) {
+    setFeedback(`La columna "${targetColumn.name}" alcanzó su límite WIP.`, true);
+    state.columns = state.columns.map((column) => {
+      if (column.id !== fromColumnId) return column;
+      return { ...column, tasks: [...column.tasks, movingTask] };
+    });
+    return;
+  }
+
   state.columns = state.columns.map((column) => {
     if (column.id !== toColumnId) return column;
     const now = new Date().toISOString();
@@ -898,6 +949,7 @@ function createColumnElement(column) {
   const countEl = clone.querySelector('.column-count');
   const tasksEl = clone.querySelector('.tasks');
   const renameColumnBtn = clone.querySelector('.rename-column');
+  const setColumnWipBtn = clone.querySelector('.set-column-wip');
   const toggleColumnVisibilityBtn = clone.querySelector('.toggle-column-visibility');
   const moveLeftBtn = clone.querySelector('.move-column-left');
   const moveRightBtn = clone.querySelector('.move-column-right');
@@ -929,6 +981,18 @@ function createColumnElement(column) {
   countEl.textContent = isGuardado
     ? `${archivedTasks.length} guardada${archivedTasks.length === 1 ? '' : 's'}`
     : `${visibleTasks.length} tarea${visibleTasks.length === 1 ? '' : 's'}`;
+  if (!isGuardado) {
+    const wip = getWipStatus(column);
+    if (wip.limited) {
+      countEl.textContent = wip.exceeded
+        ? `${wip.activeCount}/${wip.limit} WIP (+${wip.overload})`
+        : `${wip.activeCount}/${wip.limit} WIP`;
+    }
+    countEl.classList.toggle('wip-alert', wip.atLimit || wip.exceeded);
+    countEl.classList.toggle('wip-critical', wip.exceeded);
+    columnEl.classList.toggle('wip-alert', wip.atLimit || wip.exceeded);
+    columnEl.classList.toggle('wip-critical', wip.exceeded);
+  }
   visibleTasks.forEach((task) => tasksEl.append(createTaskElement(task, column.id)));
 
   const columnIndex = state.columns.findIndex((col) => col.id === column.id);
@@ -948,6 +1012,7 @@ function createColumnElement(column) {
   });
 
   if (isGuardado) {
+    setColumnWipBtn.style.display = 'none';
     renameColumnBtn.style.display = 'none';
     deleteColumnBtn.style.display = 'none';
     addTaskBtn.textContent = 'Ver';
@@ -956,6 +1021,21 @@ function createColumnElement(column) {
       openCompletedTasksDialog({ mode: 'stored' });
     });
   } else {
+    setColumnWipBtn.addEventListener('click', () => {
+      wipLimitInput.value = column.wipLimit ? String(column.wipLimit) : '';
+      if (!openDialogSafely(wipDialog)) return;
+      wipDialog.addEventListener(
+        'close',
+        () => {
+          if (wipDialog.returnValue !== 'default') return;
+          const nextLimit = normalizeWipLimit(wipLimitInput.value.trim());
+          state.columns = state.columns.map((col) => (col.id === column.id ? { ...col, wipLimit: nextLimit } : col));
+          commitBoardChanges().catch((error) => setFeedback(error.message, true));
+        },
+        { once: true }
+      );
+    });
+
     renameColumnBtn.addEventListener('click', () => {
       renameColumnInput.value = column.name;
       if (!openDialogSafely(renameColumnDialog)) return;
@@ -1011,6 +1091,10 @@ function createColumnElement(column) {
       };
 
       if (!newTask.title) return;
+      if (!canAddTaskToColumn(column)) {
+        setFeedback(`La columna "${column.name}" alcanzó su límite WIP.`, true);
+        return;
+      }
 
       state.columns = state.columns.map((col) => {
         if (col.id !== column.id) return col;
@@ -1085,7 +1169,35 @@ function createColumnElement(column) {
 
 function renderBoard() {
   boardEl.innerHTML = '';
-  const visibleColumns = state.columns.filter((column) => !isColumnHidden(column.id));
+  const overloadedColumns = state.columns.filter((column) => isWipExceeded(column)).length;
+  if (viewWipAlertsBtn) {
+    viewWipAlertsBtn.textContent = `Saturadas (${overloadedColumns})`;
+  }
+  const visibleColumns = state.columns.filter((column) => {
+    if (isColumnHidden(column.id)) return false;
+    if (!showOnlyWipAlerts) return true;
+    return isWipExceeded(column);
+  });
+  if (showOnlyWipAlerts) {
+    visibleColumns.sort((a, b) => {
+      const wa = getWipStatus(a);
+      const wb = getWipStatus(b);
+      if (wb.overload !== wa.overload) return wb.overload - wa.overload;
+      return wb.activeCount - wa.activeCount;
+    });
+  }
+  if (showOnlyWipAlerts && visibleColumns.length === 0) {
+    const empty = document.createElement('article');
+    empty.className = 'column glass';
+    const title = document.createElement('h2');
+    title.className = 'column-title';
+    title.textContent = 'Sin columnas saturadas';
+    const desc = document.createElement('p');
+    desc.className = 'muted';
+    desc.textContent = 'Todas las columnas están dentro de su límite WIP.';
+    empty.append(title, desc);
+    boardEl.append(empty);
+  }
   visibleColumns.forEach((column) => boardEl.append(createColumnElement(column)));
   renderColumnVisibilityPanel();
   renderHiddenColumnsBar();
@@ -1406,6 +1518,13 @@ calendarNextBtn.addEventListener('click', () => {
   renderCalendarView();
 });
 backToBoardBtn.addEventListener('click', () => setView('board'));
+viewWipAlertsBtn?.addEventListener('click', () => {
+  showOnlyWipAlerts = !showOnlyWipAlerts;
+  if (currentView === 'calendar') setView('board');
+  viewWipAlertsBtn.classList.toggle('primary', showOnlyWipAlerts);
+  viewWipAlertsBtn.classList.toggle('ghost', !showOnlyWipAlerts);
+  renderBoard();
+});
 themeSelect?.addEventListener('change', () => {
   const nextTheme = themeIds.has(themeSelect.value) ? themeSelect.value : 'default';
   applyTheme(nextTheme);
@@ -1498,7 +1617,7 @@ columnDialog?.addEventListener('close', () => {
   const name = columnNameInput.value.trim();
   if (!name) return;
 
-  state.columns.push({ id: crypto.randomUUID(), name, tasks: [] });
+  state.columns.push({ id: crypto.randomUUID(), name, tasks: [], wipLimit: null });
   commitBoardChanges().catch((error) => setFeedback(error.message, true));
 });
 
