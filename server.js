@@ -188,51 +188,90 @@ function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+const BASE_COLUMN_NAMES = ['Ideas', 'Por Hacer', 'En Progreso', 'En Revisión', 'Hecho', 'Guardado'];
+
 function createDefaultBoard() {
   return {
     hiddenColumnIds: [],
     columns: [
-      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null, order: 1 },
+      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null, order: 2 },
+      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null, order: 3 },
+      { id: crypto.randomUUID(), name: 'En Revisión', tasks: [], wipLimit: null, order: 4 },
+      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null, order: 5 },
+      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null, order: 6 },
     ],
   };
 }
 
 function normalizeBoard(board) {
   if (!board || !Array.isArray(board.columns)) return createDefaultBoard();
-  const required = ['Ideas', 'Por Hacer', 'En Progreso', 'Hecho', 'Guardado'];
-  const columns = board.columns.map((col) => normalizeColumn(col, col?.name || 'Columna'));
+  const required = BASE_COLUMN_NAMES;
+  const columns = board.columns.map((col, index) => normalizeColumn(col, col?.name || 'Columna', index + 1));
 
-  required.forEach((requiredName) => {
+  required.forEach((requiredName, index) => {
     const exists = columns.some((column) => normalizeColumnName(column.name) === normalizeColumnName(requiredName));
     if (!exists) {
-      columns.push({ id: crypto.randomUUID(), name: requiredName, tasks: [] });
+      const requiredOrder = index + 1;
+      columns.forEach((column) => {
+        if (column.order >= requiredOrder) column.order += 1;
+      });
+      columns.push({
+        id: crypto.randomUUID(),
+        name: requiredName,
+        tasks: [],
+        wipLimit: null,
+        order: requiredOrder,
+      });
     }
   });
 
-  const validIds = new Set(columns.map((column) => column.id));
+  const orderedColumns = normalizeColumnOrder(columns);
+  const validIds = new Set(orderedColumns.map((column) => column.id));
   const hiddenColumnIds = Array.isArray(board.hiddenColumnIds)
     ? board.hiddenColumnIds.filter((id) => typeof id === 'string' && validIds.has(id))
     : [];
 
-  return { ...board, hiddenColumnIds, columns };
+  return { ...board, hiddenColumnIds, columns: orderedColumns };
 }
 
 function normalizeColumnName(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-function normalizeColumn(column, fallbackName) {
+function normalizeColumn(column, fallbackName, fallbackOrder) {
   const tasks = Array.isArray(column?.tasks) ? column.tasks.map(normalizeTask) : [];
   return {
     id: typeof column?.id === 'string' && column.id ? column.id : crypto.randomUUID(),
     name: String(fallbackName || column?.name || 'Columna'),
     wipLimit: normalizeWipLimit(column?.wipLimit),
+    order: normalizeColumnOrderValue(column?.order, fallbackOrder),
     tasks,
   };
+}
+
+function normalizeColumnOrderValue(value, fallbackOrder) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0 || num > 999) return fallbackOrder;
+  return num;
+}
+
+function normalizeColumnOrder(columns) {
+  return [...columns]
+    .sort((a, b) => {
+      const baseOrderA = getBaseColumnOrder(a.name);
+      const baseOrderB = getBaseColumnOrder(b.name);
+      if (baseOrderA !== null && baseOrderB !== null) return baseOrderA - baseOrderB;
+      if (baseOrderA !== null) return -1;
+      if (baseOrderB !== null) return 1;
+      return a.order - b.order;
+    })
+    .map((column, index) => ({ ...column, order: index + 1 }));
+}
+
+function getBaseColumnOrder(name) {
+  const index = BASE_COLUMN_NAMES.findIndex((columnName) => normalizeColumnName(columnName) === normalizeColumnName(name));
+  return index >= 0 ? index + 1 : null;
 }
 
 function normalizeTask(task) {
@@ -315,6 +354,9 @@ function isValidBoard(board) {
 
   for (const column of board.columns) {
     if (!column || typeof column.id !== 'string' || typeof column.name !== 'string') return false;
+    if (column.order !== undefined) {
+      if (!Number.isInteger(column.order) || column.order <= 0 || column.order > 999) return false;
+    }
     if (column.wipLimit !== undefined && column.wipLimit !== null) {
       if (!Number.isInteger(column.wipLimit) || column.wipLimit <= 0 || column.wipLimit > 99) return false;
     }

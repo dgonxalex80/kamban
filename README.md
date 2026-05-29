@@ -76,6 +76,29 @@ También puedes fijar el puerto manualmente:
 PORT=3010 npm run dev
 ```
 
+## Uso Del Tablero
+
+### Orden base de columnas
+
+El flujo base del tablero es:
+
+```text
+1. Ideas
+2. Por Hacer
+3. En Progreso
+4. En Revisión
+5. Hecho
+6. Guardado
+```
+
+Las columnas base se normalizan en ese orden al abrir el tablero. El usuario también puede ajustar el orden desde el botón `#` de cada columna; el número asignado se guarda junto con el tablero.
+
+### Historial de tareas terminadas y guardadas
+
+Para evitar que el tablero crezca demasiado, las columnas `Hecho` y `Guardado` muestran solo las últimas 5 tareas en el tablero.
+
+Cuando hay más tareas, aparece `Ver todas`, que abre el historial completo. También se puede consultar el historial desde el botón `Terminadas`. Las tareas no se eliminan: siguen guardadas en SQLite y pueden editarse desde el historial.
+
 ## Integrar Al Menu De Ubuntu
 
 Instala el lanzador local:
@@ -84,7 +107,9 @@ Instala el lanzador local:
 ./scripts/install-ubuntu-launcher.sh
 ```
 
-Luego busca `Kamban Flow` en el menu de aplicaciones de Ubuntu.
+Luego busca `Kamban Flow` en el menú de aplicaciones de Ubuntu.
+
+El lanzador apunta a esta carpeta del proyecto, por lo que usa los cambios locales del código. Si ya hay un proceso viejo escuchando en `3000`, ciérralo antes de abrir desde el menú para que cargue la versión actual.
 
 El lanzador inicia la app con `npm start` y abre `http://localhost:3000` en el navegador. Si necesitas otro puerto:
 
@@ -201,8 +226,8 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga
 - Registro con `usuario + clave`
 - Inicio/cierre de sesión con cookies
 - Tablero personal por usuario en SQLite
-- Flujo base: `Ideas -> Por Hacer -> En Progreso -> Hecho -> Guardado`
-- Reordenamiento de columnas (botones y arrastre)
+- Flujo base: `Ideas -> Por Hacer -> En Progreso -> En Revisión -> Hecho -> Guardado`
+- Reordenamiento de columnas (botónes, arrastre y número de orden persistente)
 - Ocultar/mostrar columnas con 1 clic
 - Barra de columnas ocultas para volver a mostrarlas rápido (incluye `Hecho/Terminada`)
 - Al mover una tarea a `Guardado`, desaparece del flujo visible y queda archivada
@@ -213,6 +238,7 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga
 - En tarjetas, las sub-actividades se muestran en lista simple (nombre, una tras otra)
 - Marcado automático de tarea terminada al completar checklist
 - Consulta de tareas terminadas y almacenadas desde botón `Terminadas`
+- En `Hecho` y `Guardado`, el tablero muestra solo las últimas 5; el resto se consulta desde `Ver todas` o `Terminadas`
 - Renombrado de columnas
 - Botón para reiniciar el tablero al estado base
 - Drag & drop de tareas entre columnas
@@ -220,6 +246,12 @@ docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="una-clave-larga
 - Métricas del tablero
 
 ## Actualizar La App
+
+Opcional (respaldo rápido de base de datos antes de actualizar):
+
+```bash
+cp data.sqlite data.sqlite.bak
+```
 
 Si ya tienes el proyecto clonado y quieres traer la última versión:
 
@@ -229,10 +261,19 @@ npm install
 npm run dev
 ```
 
-Opcional (respaldo rápido de base de datos antes de actualizar):
+Si usas el lanzador de Ubuntu, cierra cualquier proceso anterior de la app antes de abrirla de nuevo desde el menú. Puedes revisar el puerto con:
 
 ```bash
-cp data.sqlite data.sqlite.bak
+ss -ltnp | grep ':3000'
+```
+
+Si usas Docker, reconstruye la imagen después de actualizar el código:
+
+```bash
+docker build -t kamban-flow .
+docker stop kamban-flow 2>/dev/null || true
+docker rm kamban-flow 2>/dev/null || true
+docker run -d --name kamban-flow -p 3000:3000 -e SESSION_SECRET="cambia-esto" kamban-flow
 ```
 
 ## Variables opcionales

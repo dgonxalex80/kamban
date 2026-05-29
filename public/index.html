@@ -118,6 +118,7 @@
             <button class="icon-btn toggle-column-visibility" title="Ocultar columna">👁</button>
             <button class="icon-btn move-column-left" title="Mover columna a la izquierda">←</button>
             <button class="icon-btn move-column-right" title="Mover columna a la derecha">→</button>
+            <button class="icon-btn set-column-order" title="Asignar orden">#</button>
             <button class="icon-btn set-column-wip" title="Configurar límite WIP">W</button>
             <button class="icon-btn rename-column" title="Renombrar columna">✎</button>
             <button class="icon-btn add-task" title="Agregar tarea">+</button>
@@ -198,6 +199,18 @@
       <form method="dialog" class="dialog-form">
         <h2>Renombrar columna</h2>
         <input id="rename-column-input" type="text" maxlength="40" placeholder="Nuevo nombre" required />
+        <menu>
+          <button value="cancel" class="btn ghost">Cancelar</button>
+          <button value="default" class="btn primary">Guardar</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="column-order-dialog">
+      <form method="dialog" class="dialog-form">
+        <h2>Orden de columna</h2>
+        <input id="column-order-input" type="number" min="1" step="1" placeholder="Ej: 2" required />
+        <p class="muted">El número define la posición de la columna.</p>
         <menu>
           <button value="cancel" class="btn ghost">Cancelar</button>
           <button value="default" class="btn primary">Guardar</button>

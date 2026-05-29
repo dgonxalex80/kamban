@@ -1,12 +1,16 @@
+const BASE_COLUMN_NAMES = ['Ideas', 'Por Hacer', 'En Progreso', 'En Revisión', 'Hecho', 'Guardado'];
+const TERMINAL_VISIBLE_TASK_LIMIT = 5;
+
 function createDefaultBoard() {
   return {
     hiddenColumnIds: [],
     columns: [
-      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null },
-      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null },
+      { id: crypto.randomUUID(), name: 'Ideas', tasks: [], wipLimit: null, order: 1 },
+      { id: crypto.randomUUID(), name: 'Por Hacer', tasks: [], wipLimit: null, order: 2 },
+      { id: crypto.randomUUID(), name: 'En Progreso', tasks: [], wipLimit: null, order: 3 },
+      { id: crypto.randomUUID(), name: 'En Revisión', tasks: [], wipLimit: null, order: 4 },
+      { id: crypto.randomUUID(), name: 'Hecho', tasks: [], wipLimit: null, order: 5 },
+      { id: crypto.randomUUID(), name: 'Guardado', tasks: [], wipLimit: null, order: 6 },
     ],
   };
 }
@@ -48,6 +52,8 @@ const completedList = document.getElementById('completed-list');
 const completedTitle = document.getElementById('completed-title');
 const renameColumnDialog = document.getElementById('rename-column-dialog');
 const renameColumnInput = document.getElementById('rename-column-input');
+const columnOrderDialog = document.getElementById('column-order-dialog');
+const columnOrderInput = document.getElementById('column-order-input');
 const wipDialog = document.getElementById('wip-dialog');
 const wipLimitInput = document.getElementById('wip-limit-input');
 const taskEditDialog = document.getElementById('task-edit-dialog');
@@ -103,8 +109,9 @@ async function loadBoard() {
 
 function sanitizeBoard(board) {
   if (!board || !Array.isArray(board.columns)) return createDefaultBoard();
-  const sanitizedColumns = board.columns.map((column) => ({
+  const sanitizedColumns = normalizeColumnOrder(board.columns.map((column, index) => ({
     ...column,
+    order: normalizeColumnOrderValue(column.order, index + 1),
     tasks: Array.isArray(column.tasks)
       ? column.tasks.map((task) => ({
           ...task,
@@ -112,7 +119,7 @@ function sanitizeBoard(board) {
           activities: normalizeTaskActivities(task.activities),
         }))
       : [],
-  }));
+  })));
   const ids = new Set(sanitizedColumns.map((column) => column.id));
   const hiddenColumnIds = Array.isArray(board.hiddenColumnIds)
     ? board.hiddenColumnIds.filter((id) => typeof id === 'string' && ids.has(id))
@@ -123,6 +130,42 @@ function sanitizeBoard(board) {
     hiddenColumnIds,
     columns: sanitizedColumns,
   };
+}
+
+function normalizeColumnOrderValue(value, fallbackOrder) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0 || num > 999) return fallbackOrder;
+  return num;
+}
+
+function normalizeColumnOrder(columns) {
+  return [...columns]
+    .sort((a, b) => {
+      const baseOrderA = getBaseColumnOrder(a.name);
+      const baseOrderB = getBaseColumnOrder(b.name);
+      if (baseOrderA !== null && baseOrderB !== null) return baseOrderA - baseOrderB;
+      if (baseOrderA !== null) return -1;
+      if (baseOrderB !== null) return 1;
+      return a.order - b.order;
+    })
+    .map((column, index) => ({ ...column, order: index + 1 }));
+}
+
+function getBaseColumnOrder(name) {
+  const index = BASE_COLUMN_NAMES.findIndex((columnName) => normalizeColumnName(columnName) === normalizeColumnName(name));
+  return index >= 0 ? index + 1 : null;
+}
+
+function moveColumnToOrder(columnId, order) {
+  const fromIndex = state.columns.findIndex((column) => column.id === columnId);
+  if (fromIndex < 0) return false;
+
+  const targetIndex = Math.min(Math.max(order, 1), state.columns.length) - 1;
+  const next = [...state.columns];
+  const [moving] = next.splice(fromIndex, 1);
+  next.splice(targetIndex, 0, moving);
+  state.columns = normalizeColumnOrder(next);
+  return true;
 }
 
 function normalizeTaskActivities(activities) {
@@ -386,6 +429,20 @@ function isDoneColumn(column) {
 
 function isStoredColumn(column) {
   return normalizeColumnName(column?.name) === 'guardado';
+}
+
+function isTerminalColumn(column) {
+  return isDoneColumn(column) || isStoredColumn(column);
+}
+
+function getTaskClosedTime(task) {
+  const value = task?.archivedAt || task?.completedAt || task?.dueDate || '';
+  const time = value ? Date.parse(value) : NaN;
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function sortTasksByClosedTime(tasks) {
+  return [...tasks].sort((a, b) => getTaskClosedTime(b) - getTaskClosedTime(a));
 }
 
 function isColumnHidden(columnId) {
@@ -950,6 +1007,7 @@ function createColumnElement(column) {
   const tasksEl = clone.querySelector('.tasks');
   const renameColumnBtn = clone.querySelector('.rename-column');
   const setColumnWipBtn = clone.querySelector('.set-column-wip');
+  const setColumnOrderBtn = clone.querySelector('.set-column-order');
   const toggleColumnVisibilityBtn = clone.querySelector('.toggle-column-visibility');
   const moveLeftBtn = clone.querySelector('.move-column-left');
   const moveRightBtn = clone.querySelector('.move-column-right');
@@ -958,12 +1016,13 @@ function createColumnElement(column) {
   const formEl = clone.querySelector('.task-form');
   const cancelBtn = clone.querySelector('.cancel-task');
   const isGuardado = isStoredColumn(column);
-  const archivedTasks = isGuardado ? column.tasks : column.tasks.filter((task) => isArchivedTask(task));
+  const isTerminal = isTerminalColumn(column);
+  const archivedTasks = isGuardado ? sortTasksByClosedTime(column.tasks) : column.tasks.filter((task) => isArchivedTask(task));
   const activeTasks = isGuardado ? [] : column.tasks.filter((task) => !isArchivedTask(task));
-  const sourceTasks = isGuardado ? archivedTasks : activeTasks;
+  const sourceTasks = isTerminal ? sortTasksByClosedTime(isGuardado ? archivedTasks : activeTasks) : activeTasks;
 
   const query = getSearchQuery();
-  const visibleTasks = sourceTasks.filter((task) => {
+  const matchingTasks = sourceTasks.filter((task) => {
     if (!query) return true;
     const activitiesText = normalizeTaskActivities(task.activities)
       .flatMap((activity) => [
@@ -974,19 +1033,21 @@ function createColumnElement(column) {
     const searchable = `${task.title} ${task.description} ${priorityLabel(task.priority)} ${activitiesText}`.toLowerCase();
     return searchable.includes(query);
   });
+  const hiddenTerminalTasks = isTerminal && !query ? Math.max(0, matchingTasks.length - TERMINAL_VISIBLE_TASK_LIMIT) : 0;
+  const visibleTasks = hiddenTerminalTasks > 0 ? matchingTasks.slice(0, TERMINAL_VISIBLE_TASK_LIMIT) : matchingTasks;
 
   columnEl.dataset.columnId = column.id;
   columnEl.draggable = true;
   titleEl.textContent = column.name;
   countEl.textContent = isGuardado
-    ? `${archivedTasks.length} guardada${archivedTasks.length === 1 ? '' : 's'}`
-    : `${visibleTasks.length} tarea${visibleTasks.length === 1 ? '' : 's'}`;
+    ? `Orden ${column.order} · ${visibleTasks.length}/${archivedTasks.length} guardada${archivedTasks.length === 1 ? '' : 's'}`
+    : `Orden ${column.order} · ${visibleTasks.length}/${matchingTasks.length} tarea${matchingTasks.length === 1 ? '' : 's'}`;
   if (!isGuardado) {
     const wip = getWipStatus(column);
     if (wip.limited) {
       countEl.textContent = wip.exceeded
-        ? `${wip.activeCount}/${wip.limit} WIP (+${wip.overload})`
-        : `${wip.activeCount}/${wip.limit} WIP`;
+        ? `Orden ${column.order} · ${wip.activeCount}/${wip.limit} WIP (+${wip.overload})`
+        : `Orden ${column.order} · ${wip.activeCount}/${wip.limit} WIP`;
     }
     countEl.classList.toggle('wip-alert', wip.atLimit || wip.exceeded);
     countEl.classList.toggle('wip-critical', wip.exceeded);
@@ -994,6 +1055,16 @@ function createColumnElement(column) {
     columnEl.classList.toggle('wip-critical', wip.exceeded);
   }
   visibleTasks.forEach((task) => tasksEl.append(createTaskElement(task, column.id)));
+  if (hiddenTerminalTasks > 0) {
+    const showAllBtn = document.createElement('button');
+    showAllBtn.type = 'button';
+    showAllBtn.className = 'btn ghost show-all-terminal';
+    showAllBtn.textContent = `Ver todas (${matchingTasks.length})`;
+    showAllBtn.addEventListener('click', () => {
+      openCompletedTasksDialog({ mode: isGuardado ? 'stored' : 'done' });
+    });
+    tasksEl.append(showAllBtn);
+  }
 
   const columnIndex = state.columns.findIndex((col) => col.id === column.id);
   moveLeftBtn.disabled = columnIndex <= 0;
@@ -1009,6 +1080,27 @@ function createColumnElement(column) {
 
   toggleColumnVisibilityBtn.addEventListener('click', () => {
     toggleColumnVisibility(column.id, false).catch((error) => setFeedback(error.message, true));
+  });
+
+  setColumnOrderBtn.addEventListener('click', () => {
+    columnOrderInput.min = '1';
+    columnOrderInput.max = String(state.columns.length);
+    columnOrderInput.value = String(column.order || columnIndex + 1);
+    if (!openDialogSafely(columnOrderDialog)) return;
+    columnOrderDialog.addEventListener(
+      'close',
+      () => {
+        if (columnOrderDialog.returnValue !== 'default') return;
+        const nextOrder = Number(columnOrderInput.value);
+        if (!Number.isInteger(nextOrder) || nextOrder < 1 || nextOrder > state.columns.length) {
+          setFeedback(`El orden debe estar entre 1 y ${state.columns.length}.`, true);
+          return;
+        }
+        moveColumnToOrder(column.id, nextOrder);
+        commitBoardChanges().catch((error) => setFeedback(error.message, true));
+      },
+      { once: true }
+    );
   });
 
   if (isGuardado) {
@@ -1121,7 +1213,7 @@ function createColumnElement(column) {
           if (!confirmed) return;
         }
 
-        state.columns = state.columns.filter((col) => col.id !== column.id);
+        state.columns = normalizeColumnOrder(state.columns.filter((col) => col.id !== column.id));
         commitBoardChanges().catch((error) => setFeedback(error.message, true));
       })();
     });
@@ -1420,7 +1512,7 @@ async function moveColumn(columnId, direction) {
   const next = [...state.columns];
   const [moving] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moving);
-  state.columns = next;
+  state.columns = normalizeColumnOrder(next);
   await commitBoardChanges();
 }
 
@@ -1431,7 +1523,7 @@ async function moveColumnToIndex(fromColumnId, targetColumnId) {
   const next = [...state.columns];
   const [moving] = next.splice(fromIndex, 1);
   next.splice(targetIndex, 0, moving);
-  state.columns = next;
+  state.columns = normalizeColumnOrder(next);
   await commitBoardChanges();
 }
 
@@ -1449,7 +1541,7 @@ function collectCompletedTasks(mode = 'all') {
       }
     });
   });
-  return result;
+  return result.sort((a, b) => getTaskClosedTime(b) - getTaskClosedTime(a));
 }
 
 function openCompletedTasksDialog(options = {}) {
@@ -1617,7 +1709,7 @@ columnDialog?.addEventListener('close', () => {
   const name = columnNameInput.value.trim();
   if (!name) return;
 
-  state.columns.push({ id: crypto.randomUUID(), name, tasks: [], wipLimit: null });
+  state.columns.push({ id: crypto.randomUUID(), name, tasks: [], wipLimit: null, order: state.columns.length + 1 });
   commitBoardChanges().catch((error) => setFeedback(error.message, true));
 });
 

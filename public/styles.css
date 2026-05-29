@@ -667,6 +667,13 @@ input[type='search'] {
   padding: 0.36rem 0.48rem;
 }
 
+
+.show-all-terminal {
+  width: 100%;
+  justify-content: center;
+  font-size: 0.72rem;
+}
+
 .task-form {
   border-top: 1px solid var(--border);
   padding-top: 0.55rem;
