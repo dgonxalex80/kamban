@@ -29,7 +29,6 @@ const appPanelEl = document.getElementById('app-panel');
 const welcomeEl = document.getElementById('welcome');
 const feedbackEl = document.getElementById('feedback');
 const loginFormEl = document.getElementById('login-form');
-const registerFormEl = document.getElementById('register-form');
 const logoutBtn = document.getElementById('logout-btn');
 const resetAppBtn = document.getElementById('reset-app-btn');
 
@@ -88,9 +87,51 @@ const taskTemplate = document.getElementById('task-template');
 let taskEditorState = { taskId: null, activities: [], returnMode: null };
 const themeIds = new Set(['default', 'dark-blue', 'light-blue', 'white']);
 
+initializeControls();
 start();
 
+function initializeControls() {
+  const iconNames = {
+    'toggle-column-visibility': 'EyeOff', 'move-column-left': 'ArrowLeft',
+    'move-column-right': 'ArrowRight', 'set-column-order': 'ListOrdered',
+    'set-column-wip': 'Gauge', 'rename-column': 'Pencil', 'delete-column': 'Trash2',
+    'edit-task': 'Pencil', 'delete-task': 'Trash2',
+  };
+  [columnTemplate.content, taskTemplate.content].forEach((root) => {
+    Object.entries(iconNames).forEach(([className, iconName]) => {
+      root.querySelectorAll(`.${className}`).forEach((button) => {
+        button.setAttribute('aria-label', button.title);
+        button.replaceChildren(lucide.createElement(lucide.icons[iconName], { 'aria-hidden': 'true', class: 'lucide' }));
+        if (button.closest('.column-actions')) button.append(document.createTextNode(button.title));
+      });
+    });
+  });
+  lucide.createIcons({ icons: lucide.icons, inTemplates: true, attrs: { 'aria-hidden': 'true' } });
+  document.querySelectorAll('button[title]').forEach((button) => button.setAttribute('aria-label', button.title));
+  calendarPrevBtn.setAttribute('aria-label', 'Mes anterior');
+  calendarNextBtn.setAttribute('aria-label', 'Mes siguiente');
+  document.getElementById('view-board-btn').addEventListener('click', () => setView('board'));
+  document.addEventListener('click', (event) => {
+    document.querySelectorAll('.column-menu[open]').forEach((menu) => {
+      if (!menu.contains(event.target) || event.target.closest('button')) menu.open = false;
+    });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.column-menu[open]').forEach((menu) => {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    });
+  });
+}
+
 async function start() {
+  const isFilePreview = window.location.protocol === 'file:';
+  if (isFilePreview) {
+    window.location.replace('http://localhost:3000');
+    return;
+  }
+
   try {
     const me = await apiFetch('/api/auth/me');
     currentUser = me.user;
@@ -261,7 +302,7 @@ function initializeTheme() {
 
 function setFeedback(message, isError = false) {
   feedbackEl.textContent = message;
-  feedbackEl.style.color = isError ? 'var(--danger)' : '#ffd8a0';
+  feedbackEl.style.color = isError ? 'var(--danger)' : 'var(--accent)';
 }
 
 async function apiFetch(url, options = {}) {
@@ -323,7 +364,6 @@ loginFormEl.addEventListener('submit', async (event) => {
       method: 'POST',
       body: JSON.stringify({
         username: String(fd.get('username') || '').trim(),
-        password: String(fd.get('password') || ''),
       }),
     });
 
@@ -331,29 +371,7 @@ loginFormEl.addEventListener('submit', async (event) => {
     await loadBoard();
     showApp();
     loginFormEl.reset();
-    setFeedback('Sesión iniciada.');
-  } catch (error) {
-    setFeedback(error.message, true);
-  }
-});
-
-registerFormEl.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const fd = new FormData(registerFormEl);
-  try {
-    const response = await apiFetch('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        username: String(fd.get('username') || '').trim(),
-        password: String(fd.get('password') || ''),
-      }),
-    });
-
-    currentUser = response.user;
-    await loadBoard();
-    showApp();
-    registerFormEl.reset();
-    setFeedback('Cuenta creada y sesión iniciada.');
+    setFeedback('Tablero cargado.');
   } catch (error) {
     setFeedback(error.message, true);
   }
@@ -887,6 +905,9 @@ function createTaskElement(task, columnId) {
   priorityEl.textContent = priorityLabel(task.priority);
   dueEl.textContent = formatDate(task.dueDate);
   dueEl.dateTime = task.dueDate || '';
+  const overdue = task.dueDate && task.dueDate < formatDateIsoLocal(new Date()) && !completed;
+  dueEl.classList.toggle('overdue', Boolean(overdue));
+  if (overdue) dueEl.title = 'Fecha de vencimiento superada';
   progressEl.textContent =
     progress.total > 0
       ? `${progress.done}/${progress.total} actividades`
@@ -1107,8 +1128,9 @@ function createColumnElement(column) {
     setColumnWipBtn.style.display = 'none';
     renameColumnBtn.style.display = 'none';
     deleteColumnBtn.style.display = 'none';
-    addTaskBtn.textContent = 'Ver';
+    addTaskBtn.replaceChildren(lucide.createElement(lucide.icons.Archive, { 'aria-hidden': 'true', class: 'lucide' }));
     addTaskBtn.title = 'Ver tareas guardadas';
+    addTaskBtn.setAttribute('aria-label', addTaskBtn.title);
     addTaskBtn.addEventListener('click', () => {
       openCompletedTasksDialog({ mode: 'stored' });
     });
@@ -1366,6 +1388,11 @@ function setView(nextView) {
   }
   currentView = nextView === 'calendar' ? 'calendar' : 'board';
   const isCalendar = currentView === 'calendar';
+  document.getElementById('view-title').textContent = isCalendar ? 'Calendario' : 'Tablero';
+  document.getElementById('board-toolbar').classList.toggle('hidden', isCalendar);
+  addColumnBtn.classList.toggle('hidden', isCalendar);
+  document.getElementById('view-board-btn').setAttribute('aria-current', isCalendar ? 'false' : 'page');
+  viewCalendarBtn.setAttribute('aria-current', isCalendar ? 'page' : 'false');
   boardEl.classList.toggle('hidden', isCalendar);
   statsEl.classList.toggle('hidden', isCalendar);
   if (isCalendar) {
@@ -1375,6 +1402,7 @@ function setView(nextView) {
   }
   hiddenColumnsBar.classList.toggle('hidden', isCalendar || (state.hiddenColumnIds || []).length === 0);
   calendarPanel.classList.toggle('hidden', !isCalendar);
+  toggleColumnsBtn.setAttribute('aria-expanded', String(!columnVisibilityPanel.classList.contains('hidden')));
   viewCalendarBtn.classList.toggle('primary', isCalendar);
   viewCalendarBtn.classList.toggle('ghost', !isCalendar);
   if (isCalendar) renderCalendarView();
@@ -1596,9 +1624,10 @@ toggleColumnsBtn.addEventListener('click', () => {
   if (currentView === 'calendar') setView('board');
   columnVisibilityPanel.classList.toggle('hidden');
   columnPanelWasOpen = !columnVisibilityPanel.classList.contains('hidden');
+  toggleColumnsBtn.setAttribute('aria-expanded', String(columnPanelWasOpen));
 });
 viewCalendarBtn.addEventListener('click', () => {
-  setView(currentView === 'calendar' ? 'board' : 'calendar');
+  setView('calendar');
 });
 viewCompletedBtn.addEventListener('click', openCompletedTasksDialog);
 calendarPrevBtn.addEventListener('click', () => {
@@ -1612,6 +1641,7 @@ calendarNextBtn.addEventListener('click', () => {
 backToBoardBtn.addEventListener('click', () => setView('board'));
 viewWipAlertsBtn?.addEventListener('click', () => {
   showOnlyWipAlerts = !showOnlyWipAlerts;
+  viewWipAlertsBtn.setAttribute('aria-pressed', String(showOnlyWipAlerts));
   if (currentView === 'calendar') setView('board');
   viewWipAlertsBtn.classList.toggle('primary', showOnlyWipAlerts);
   viewWipAlertsBtn.classList.toggle('ghost', !showOnlyWipAlerts);

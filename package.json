@@ -4,12 +4,14 @@
   "description": "App Kanban multiusuario con Express, SQLite y sesiones",
   "license": "MIT",
   "main": "server.js",
+  "engines": {
+    "node": ">=18 <26"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.9.1",
     "express": "^4.21.2",
     "express-session": "^1.18.1"

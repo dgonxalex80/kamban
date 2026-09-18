@@ -2,9 +2,11 @@
 
 App Kanban con backend `Express + SQLite + sesiones/cookies`.
 
+El acceso requiere únicamente un nombre de usuario. Si el usuario no existe, se crea automáticamente; si ya existe, se abre su tablero guardado.
+
 ## Requisitos
 
-- Node.js 18+
+- Node.js 18 a 24 (Node.js 26 todavía no es compatible con la versión actual de SQLite)
 - Git
 
 ## Instalar Node.js

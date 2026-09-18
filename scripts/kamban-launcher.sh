@@ -9,12 +9,17 @@ LOG_FILE="$LOG_DIR/server.log"
 
 mkdir -p "$LOG_DIR"
 
+NODE_BIN=""
 if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   # Desktop launchers do not load the interactive shell profile.
-  # Load nvm so native modules use the same Node version as the terminal.
+  # Ask nvm for Node 24 directly; other PATH entries may otherwise override it.
   # shellcheck source=/dev/null
   source "$HOME/.nvm/nvm.sh"
-  nvm use --silent default >/dev/null 2>&1 || true
+  NODE_BIN="$(nvm which 24 2>/dev/null || nvm which default 2>/dev/null || true)"
+fi
+
+if [[ -z "$NODE_BIN" ]]; then
+  NODE_BIN="$(command -v node)"
 fi
 
 server_responds() {
@@ -32,9 +37,9 @@ if server_responds; then
 else
   cd "$APP_DIR"
   if command -v setsid >/dev/null 2>&1; then
-    setsid env PORT="$PORT" npm start >>"$LOG_FILE" 2>&1 < /dev/null &
+    setsid env PORT="$PORT" "$NODE_BIN" server.js >>"$LOG_FILE" 2>&1 < /dev/null &
   else
-    PORT="$PORT" nohup npm start >>"$LOG_FILE" 2>&1 < /dev/null &
+    PORT="$PORT" nohup "$NODE_BIN" server.js >>"$LOG_FILE" 2>&1 < /dev/null &
   fi
   echo "$!" >"$PID_FILE"
 fi

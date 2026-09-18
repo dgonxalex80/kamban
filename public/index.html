@@ -4,64 +4,66 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kamban Flow</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="background-glow"></div>
 
     <main class="shell">
       <section id="auth-panel" class="auth-panel glass">
         <div>
-          <p class="eyebrow">Metodología Kanban</p>
+          <p class="eyebrow">Tu espacio de trabajo</p>
           <h1>Kamban Flow</h1>
-          <p class="muted">Solo necesitas usuario y clave.</p>
+          <p class="muted">Escribe tu usuario para abrir el tablero.</p>
         </div>
 
         <div class="auth-grid simple">
           <form id="login-form" class="auth-form" autocomplete="off">
             <h2>Iniciar sesión</h2>
-            <input name="username" type="text" placeholder="Usuario" required maxlength="40" />
-            <input name="password" type="password" placeholder="Clave" required minlength="6" />
+            <label for="login-username">Usuario</label>
+            <input id="login-username" name="username" type="text" placeholder="Tu nombre de usuario" required maxlength="40" />
             <button type="submit" class="btn primary">Entrar</button>
-          </form>
-
-          <form id="register-form" class="auth-form" autocomplete="off">
-            <h2>Crear cuenta</h2>
-            <input name="username" type="text" placeholder="Usuario" required maxlength="40" />
-            <input name="password" type="password" placeholder="Clave" required minlength="6" />
-            <button type="submit" class="btn ghost">Registrarme</button>
           </form>
         </div>
       </section>
 
       <section id="app-panel" class="app hidden">
-        <header class="topbar glass">
-          <div>
-            <h1>Kamban Flow</h1>
-            <p id="welcome" class="muted"></p>
-          </div>
-
+        <header class="topbar">
+          <div class="brand"><i data-lucide="panels-top-left" aria-hidden="true"></i><span>Kamban Flow</span></div>
           <div class="topbar-actions">
-            <input id="search-input" type="search" placeholder="Buscar tareas..." aria-label="Buscar tareas" />
+            <p id="welcome" class="muted"></p>
+            <button id="logout-btn" class="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión"><i data-lucide="log-out"></i></button>
+          </div>
+        </header>
+        <aside class="sidebar" aria-label="Espacio de trabajo">
+          <div class="workspace-name"><span class="workspace-avatar">K</span><div><strong>Mi espacio</strong><small>Proyecto personal</small></div></div>
+          <p class="nav-label">PLANIFICACIÓN</p>
+          <nav aria-label="Vistas del proyecto">
+            <button id="view-board-btn" class="btn nav-btn" aria-current="page"><i data-lucide="columns-3"></i>Tablero</button>
+            <button id="view-calendar-btn" class="btn ghost nav-btn"><i data-lucide="calendar-days"></i>Calendario</button>
+            <button id="view-completed-btn" class="btn ghost nav-btn"><i data-lucide="circle-check"></i>Terminadas</button>
+          </nav>
+          <div class="sidebar-settings">
+            <label class="nav-label" for="theme-select">APARIENCIA</label>
             <select id="theme-select" class="theme-select" aria-label="Tema visual">
-              <option value="default">Azul turquesa</option>
+              <option value="default">Claro · Jira</option>
               <option value="dark-blue">Azul oscuro</option>
               <option value="light-blue">Azul claro</option>
               <option value="white">Blanco</option>
             </select>
-            <button id="toggle-columns-btn" class="btn ghost">Kamban</button>
-            <button id="view-wip-alerts-btn" class="btn ghost">Saturadas</button>
-            <button id="view-calendar-btn" class="btn ghost">Calendario</button>
-            <button id="view-completed-btn" class="btn ghost">Terminadas</button>
-            <button id="add-column-btn" class="btn primary">+ Columna</button>
-            <button id="reset-app-btn" class="btn ghost">Reiniciar</button>
-            <button id="logout-btn" class="btn ghost">Salir</button>
+            <button id="reset-app-btn" class="btn ghost nav-btn"><i data-lucide="rotate-ccw"></i>Reiniciar tablero</button>
           </div>
-        </header>
-
+        </aside>
+        <div class="workspace">
+          <p class="breadcrumb">Mi espacio <span>/</span> Proyecto personal</p>
+          <div class="workspace-heading">
+            <h1 id="view-title">Tablero</h1>
+            <button id="add-column-btn" class="btn primary"><i data-lucide="plus"></i>Columna</button>
+          </div>
+          <div id="board-toolbar" class="board-toolbar" aria-label="Herramientas del tablero">
+            <div class="search-field"><i data-lucide="search" aria-hidden="true"></i><input id="search-input" type="search" placeholder="Buscar tareas" aria-label="Buscar tareas" /></div>
+            <button id="view-wip-alerts-btn" class="btn ghost" aria-pressed="false">Saturadas (0)</button>
+            <button id="toggle-columns-btn" class="btn ghost" aria-expanded="false" aria-controls="column-visibility-panel"><i data-lucide="sliders-horizontal"></i>Columnas</button>
+          </div>
         <section id="column-visibility-panel" class="visibility-panel glass hidden" aria-label="Visibilidad de columnas">
           <p class="visibility-title">Mostrar/Ocultar columnas</p>
           <div id="column-visibility-list" class="visibility-list"></div>
@@ -102,6 +104,7 @@
         </section>
 
         <section id="board" class="board" aria-label="Tablero Kanban"></section>
+        </div>
       </section>
 
       <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
@@ -114,15 +117,20 @@
             <h2 class="column-title"></h2>
             <p class="column-count">0 tareas</p>
           </div>
-          <div class="column-actions">
+          <div class="column-tools">
+            <button class="icon-btn add-task" title="Agregar tarea" aria-label="Agregar tarea"><i data-lucide="plus"></i></button>
+            <details class="column-menu">
+              <summary class="icon-btn" title="Opciones de columna" aria-label="Opciones de columna"><i data-lucide="ellipsis"></i></summary>
+              <div class="column-actions">
             <button class="icon-btn toggle-column-visibility" title="Ocultar columna">👁</button>
             <button class="icon-btn move-column-left" title="Mover columna a la izquierda">←</button>
             <button class="icon-btn move-column-right" title="Mover columna a la derecha">→</button>
             <button class="icon-btn set-column-order" title="Asignar orden">#</button>
             <button class="icon-btn set-column-wip" title="Configurar límite WIP">W</button>
             <button class="icon-btn rename-column" title="Renombrar columna">✎</button>
-            <button class="icon-btn add-task" title="Agregar tarea">+</button>
             <button class="icon-btn delete-column" title="Eliminar columna">×</button>
+              </div>
+            </details>
           </div>
         </header>
 
@@ -270,6 +278,7 @@
       </form>
     </dialog>
 
+    <script src="vendor/lucide.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

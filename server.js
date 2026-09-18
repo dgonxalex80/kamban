@@ -2,7 +2,6 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
-const bcrypt = require('bcryptjs');
 const Database = require('better-sqlite3');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -44,51 +43,20 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   return res.json({ user });
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/login', (req, res) => {
   const username = normalizeUsername(req.body?.username);
-  const password = String(req.body?.password || '');
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Usuario y clave son obligatorios' });
+  if (!username) {
+    return res.status(400).json({ error: 'El usuario es obligatorio' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'La clave debe tener mínimo 6 caracteres' });
-  }
-
-  const existing = db.prepare('SELECT id FROM users WHERE name = ?').get(username);
-  if (existing) {
-    return res.status(409).json({ error: 'Ese usuario ya existe' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const now = new Date().toISOString();
-  const fakeEmail = `${username}@kamban.local`;
-
-  const result = db
-    .prepare('INSERT INTO users (name, email, password_hash, board_json, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(username, fakeEmail, passwordHash, JSON.stringify(createDefaultBoard()), now);
-
-  req.session.userId = Number(result.lastInsertRowid);
-  return res.status(201).json({ user: { id: Number(result.lastInsertRowid), username } });
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  const username = normalizeUsername(req.body?.username);
-  const password = String(req.body?.password || '');
-
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Usuario y clave son obligatorios' });
-  }
-
-  const user = db.prepare('SELECT id, name, password_hash FROM users WHERE name = ?').get(username);
+  let user = db.prepare('SELECT id, name FROM users WHERE name = ?').get(username);
   if (!user) {
-    return res.status(401).json({ error: 'Credenciales inválidas' });
-  }
-
-  const validPassword = await bcrypt.compare(password, user.password_hash);
-  if (!validPassword) {
-    return res.status(401).json({ error: 'Credenciales inválidas' });
+    const now = new Date().toISOString();
+    const result = db
+      .prepare('INSERT INTO users (name, email, password_hash, board_json, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(username, `${username}@kamban.local`, '', JSON.stringify(createDefaultBoard()), now);
+    user = { id: Number(result.lastInsertRowid), name: username };
   }
 
   req.session.userId = user.id;
@@ -176,17 +144,34 @@ function initializeDb() {
       created_at TEXT NOT NULL
     );
   `);
+
+  const columns = db.prepare('PRAGMA table_info(users)').all();
+  if (!columns.some((column) => column.name === 'recovery_code_hash')) {
+    db.exec('ALTER TABLE users ADD COLUMN recovery_code_hash TEXT');
+  }
+
+  db.prepare(`
+    UPDATE users
+    SET email = name
+    WHERE email LIKE '%@kamban.local'
+      AND name LIKE '%@%.%'
+      AND NOT EXISTS (
+        SELECT 1 FROM users AS owner
+        WHERE owner.email = users.name AND owner.id <> users.id
+      )
+  `).run();
 }
 
 function getUser(userId) {
-  const row = db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId);
+  const row = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(userId);
   if (!row) return null;
-  return { id: row.id, username: row.name };
+  return { id: row.id, username: row.name, email: row.email };
 }
 
 function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
+
 
 const BASE_COLUMN_NAMES = ['Ideas', 'Por Hacer', 'En Progreso', 'En Revisión', 'Hecho', 'Guardado'];
 
